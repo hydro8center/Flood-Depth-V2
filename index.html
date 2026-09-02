@@ -419,6 +419,7 @@
     color:#685319;font-size:11.5px;line-height:1.6;margin-top:11px}
   @media(min-width:600px){.forecastinputs{grid-template-columns:repeat(5,minmax(0,1fr))}
     .forecastinputs label.wide{grid-column:auto}.forecast{padding:18px}.plotgrid{grid-template-columns:1fr 1fr}.forecastsummary{grid-template-columns:repeat(3,1fr)}}
+  .forecastrefs .plotgrid{grid-template-columns:1fr}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -567,11 +568,11 @@
       <p class="modelnote" id="fcModelNote"></p>
     </div>
     <section class="forecastrefs">
-      <h3>กราฟความสัมพันธ์น้ำฝน–น้ำท่า (เอกสารอ้างอิง)</h3>
+      <h3>กราฟความสัมพันธ์น้ำฝน–น้ำท่ารายเหตุการณ์ (เอกสารอ้างอิง)</h3>
       <p class="refmethod" id="rrMethod">กำลังอ่านข้อมูลความสัมพันธ์…</p>
       <div class="plotgrid">
-        <div class="plotcard"><b>X.173A</b><svg id="rr173" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.173A"></svg><p class="equation" id="rrEq173"></p></div>
-        <div class="plotcard"><b>X.90</b><svg id="rr90" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.90"></svg><p class="equation" id="rrEq90"></p></div>
+        <div class="plotcard"><b>X.173A</b><p class="chartcaveat" id="rrFilter173"></p><svg id="rr173" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.173A"></svg><p class="equation" id="rrEq173"></p></div>
+        <div class="plotcard"><b>X.90</b><p class="chartcaveat" id="rrFilter90"></p><svg id="rr90" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.90"></svg><p class="equation" id="rrEq90"></p></div>
       </div>
     </section>
   </section>
@@ -721,7 +722,7 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.0.6</span>
+    <span class="ver">Version 0.0.7</span>
     <div style="margin-top:13px">
       ต้นแบบเพื่อการออกแบบระบบ ยังไม่ผ่านการสอบทาน — ห้ามใช้ตัดสินใจอพยพจริง<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
@@ -1597,7 +1598,9 @@ function drawHourlyChart(svgId, rows, station) {
 
 function drawRelationship(svgId, equationId, relationship) {
   const svg=$(svgId), W=600, Hh=400, left=64, right=20, top=24, bottom=58;
-  const xMax=Math.max(1,relationship.x_max)*1.05, yMax=Math.max(1,relationship.y_max)*1.05;
+  const xMax=Math.max(1,relationship.x_max)*1.05;
+  const lineAtMax=relationship.slope*xMax+relationship.intercept;
+  const yMax=Math.max(1,relationship.y_max,lineAtMax)*1.08;
   const x=v=>left+v/xMax*(W-left-right), y=v=>top+(yMax-v)/yMax*(Hh-top-bottom);
   let grid='';
   for(let i=0;i<=5;i++){
@@ -1607,13 +1610,17 @@ function drawRelationship(svgId, equationId, relationship) {
     grid+=`<line x1="${left}" y1="${yy}" x2="${W-right}" y2="${yy}" stroke="#E1E8EB"/><text x="${left-7}" y="${yy+4}" text-anchor="end" fill="#657781" font-size="10">${fmt(yv,0)}</text>`;
   }
   const dots=relationship.points.map(p=>`<circle cx="${x(p[0])}" cy="${y(p[1])}" r="3" fill="#2E73C8" opacity=".5"/>`).join('');
-  const y0=Math.max(0,relationship.intercept), y1=relationship.slope*xMax+relationship.intercept;
-  svg.innerHTML=`${grid}${dots}<line x1="${x(0)}" y1="${y(y0)}" x2="${x(xMax)}" y2="${y(y1)}" stroke="#1F6ED4" stroke-width="2.5" stroke-dasharray="5 5"/>
+  const lineX0=relationship.slope>0&&relationship.intercept<0?Math.min(xMax,-relationship.intercept/relationship.slope):0;
+  const lineY0=Math.max(0,relationship.slope*lineX0+relationship.intercept), lineY1=relationship.slope*xMax+relationship.intercept;
+  svg.innerHTML=`${grid}${dots}<line x1="${x(lineX0)}" y1="${y(lineY0)}" x2="${x(xMax)}" y2="${y(lineY1)}" stroke="#1F6ED4" stroke-width="2.5" stroke-dasharray="5 5"/>
     <line x1="${left}" y1="${Hh-bottom}" x2="${W-right}" y2="${Hh-bottom}" stroke="#91A9B4"/>
-    <text x="${W/2}" y="${Hh-12}" text-anchor="middle" fill="#435963" font-size="11">ฝนเฉลี่ยลุ่มน้ำสะสม 2 วัน (มม.)</text>
-    <text x="15" y="${Hh/2}" transform="rotate(-90 15 ${Hh/2})" text-anchor="middle" fill="#435963" font-size="11">Q อีก 2 วันถัดมา (ม³/วินาที)</text>`;
+    <text x="${W/2}" y="${Hh-12}" text-anchor="middle" fill="#435963" font-size="11">${relationship.x_label_th}</text>
+    <text x="15" y="${Hh/2}" transform="rotate(-90 15 ${Hh/2})" text-anchor="middle" fill="#435963" font-size="11">Direct runoff เหนือ baseflow (มม.)</text>`;
   const sign=relationship.intercept>=0?'+':'−';
-  $(equationId).textContent=`y = ${fmt(relationship.slope,4)}x ${sign} ${fmt(Math.abs(relationship.intercept),3)} · R² = ${fmt(relationship.r_squared,4)} · n = ${relationship.n_full.toLocaleString('th-TH')} วัน`;
+  const r=Math.sqrt(Math.max(0,relationship.r_squared));
+  const ci=relationship.r_squared_bootstrap_95;
+  const test=relationship.temporal_test;
+  $(equationId).innerHTML=`y = ${fmt(relationship.slope,4)}x ${sign} ${fmt(Math.abs(relationship.intercept),3)}<br>R = ${fmt(r,3)} · R² = ${fmt(relationship.r_squared,4)} (95% bootstrap ${fmt(ci[0],3)}–${fmt(ci[1],3)})<br>n = ${relationship.n_full.toLocaleString('th-TH')} เหตุการณ์ · test ตามเวลา R² = ${fmt(test.fit_r_squared,3)} (n=${test.n})`;
 }
 
 function renderForecast(result, issuedDate) {
@@ -1746,7 +1753,9 @@ async function loadRelationshipReference(){
   try{
     const r=await fetch(RR_REFERENCE_URL,{cache:'no-store'}); if(!r.ok)throw new Error('HTTP '+r.status);
     RR_REFERENCE=await r.json();
-    $('rrMethod').textContent=`${RR_REFERENCE.method_th} · ${RR_REFERENCE.source_period.start} ถึง ${RR_REFERENCE.source_period.end} · ${RR_REFERENCE.warning_th}`;
+    $('rrMethod').textContent=`${RR_REFERENCE.method_th} · ${RR_REFERENCE.selection_th} · ${RR_REFERENCE.warning_th}`;
+    $('rrFilter173').textContent=RR_REFERENCE.relationships['X.173A'].sample_definition_th;
+    $('rrFilter90').textContent=RR_REFERENCE.relationships['X.90'].sample_definition_th;
     drawRelationship('rr173','rrEq173',RR_REFERENCE.relationships['X.173A']);
     drawRelationship('rr90','rrEq90',RR_REFERENCE.relationships['X.90']);
   }catch(error){$('rrMethod').textContent='โหลดกราฟอ้างอิงไม่สำเร็จ: '+error.message;}
