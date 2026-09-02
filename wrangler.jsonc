@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hatyai-x44",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+
+  // โดเมนของเว็บแอปที่อนุญาตให้เรียกตัวกลางนี้
+  // ระหว่างทดสอบใส่ "*" ได้ แต่ตอนใช้จริงควรใส่โดเมนจริง
+  "vars": {
+    "ALLOW_ORIGIN": "https://ชื่อบัญชีของคุณ.github.io"
+  }
+
+  // RID_KEY, RID_SECRET, X44_STATION_ID ไม่ต้องใส่ในไฟล์นี้
+  // ตั้งด้วยคำสั่ง  npx wrangler secret put ชื่อตัวแปร  เท่านั้น
+}

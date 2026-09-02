@@ -1,0 +1,67 @@
+{
+  "schema": 2,
+  "model_version": "direct-horizon-x173a-x90-2026-09-02",
+  "status": "prototype_not_operational",
+  "method": "direct_horizon_ridge_regression",
+  "source_package": "Hydro_X90_Analysis_Package.zip",
+  "source_workbook": "Hydro_Rainfall_Runoff_X90_Analysis.xlsx",
+  "issued_timezone": "Asia/Bangkok",
+  "time_step": "daily",
+  "api_alpha": 0.88,
+  "units": { "discharge": "m3/s", "rainfall": "mm/day", "api": "mm" },
+  "training_quality_control": {
+    "minimum_observed_thiessen_weight_fraction": 0.5,
+    "calibration_start": "2010-04-17",
+    "test_end": "2024-03-30",
+    "split_method": "chronological_80_20"
+  },
+  "direct_models": {
+    "X.90": {
+      "1": {
+        "ridge_lambda": 10,
+        "coefficients": { "intercept": -0.1009142655904931, "Q_origin": 0.8093158817651827, "API_origin": -0.10425676585785798, "P_past0": 1.2232045202385882, "P_past1": 0.8093353283581567, "P_past2": 0.0498646977645056, "P_fcst1": 0.08342958633903484 }
+      },
+      "2": {
+        "ridge_lambda": 100,
+        "coefficients": { "intercept": -0.7591087254040083, "Q_origin": 0.5879097634857449, "API_origin": -0.048327225642123293, "P_past0": 1.6366177134996138, "P_past1": 0.7251299958861949, "P_past2": -0.15365045273077443, "P_fcst1": 1.1912734606119948, "P_fcst2": -0.012527964600739589 }
+      },
+      "3": {
+        "ridge_lambda": 100,
+        "coefficients": { "intercept": -0.8598280907338811, "Q_origin": 0.4716955211490233, "API_origin": -0.05476802318435622, "P_past0": 1.3806190756916332, "P_past1": 0.3479701495608592, "P_past2": -0.25130884115996216, "P_fcst1": 1.677019565614378, "P_fcst2": 1.1296327775534243, "P_fcst3": -0.02396589049546194 }
+      }
+    },
+    "X.173A": {
+      "1": {
+        "ridge_lambda": 0,
+        "coefficients": { "intercept": -0.5076431788845248, "Q_origin": 0.8426209438115555, "API_origin": -0.016023072180836827, "P_past0": 0.5408565553508925, "P_past1": 0.4069202265747206, "P_past2": -0.07021344287721261, "P_fcst1": 0.05722719725301743 }
+      },
+      "2": {
+        "ridge_lambda": 0,
+        "coefficients": { "intercept": -1.1613783507732798, "Q_origin": 0.6489599048252717, "API_origin": 0.03326108622012976, "P_past0": 0.8019469196176994, "P_past1": 0.2793990040070289, "P_past2": -0.1342653893673802, "P_fcst1": 0.5889594451692975, "P_fcst2": 0.0010486062779032851 }
+      },
+      "3": {
+        "ridge_lambda": 0,
+        "coefficients": { "intercept": -1.4780020727550678, "Q_origin": 0.5421963941281872, "API_origin": 0.04139847796480331, "P_past0": 0.6079014997137022, "P_past1": 0.14178087265140502, "P_past2": -0.16023497497234918, "P_fcst1": 0.8917656332024959, "P_fcst2": 0.554919830094615, "P_fcst3": -0.022832419118368755 }
+      }
+    }
+  },
+  "reported_validation": {
+    "X.90": {
+      "1": { "n": 991, "rmse_m3s": 17.196622, "mae_m3s": 10.725284, "r2": 0.868943, "nse": 0.865246, "kge": 0.872683, "bias_pct": -5.635406 },
+      "2": { "n": 991, "rmse_m3s": 24.974525, "mae_m3s": 16.079309, "r2": 0.730086, "nse": 0.715783, "kge": 0.738113, "bias_pct": -11.364346 },
+      "3": { "n": 991, "rmse_m3s": 28.450184, "mae_m3s": 18.699285, "r2": 0.653289, "nse": 0.631171, "kge": 0.668530, "bias_pct": -14.553503 }
+    },
+    "X.173A": {
+      "1": { "n": 991, "rmse_m3s": 6.506432, "mae_m3s": 3.852059, "r2": 0.938362, "nse": 0.936998, "kge": 0.929537, "bias_pct": -2.586064 },
+      "2": { "n": 991, "rmse_m3s": 9.938657, "mae_m3s": 6.150080, "r2": 0.857702, "nse": 0.852997, "kge": 0.851902, "bias_pct": -5.332662 },
+      "3": { "n": 991, "rmse_m3s": 11.460254, "mae_m3s": 7.270027, "r2": 0.811581, "nse": 0.804539, "kge": 0.810592, "bias_pct": -6.956797 }
+    }
+  },
+  "constraints": [
+    "Forecast metrics are hindcast results that used observed future rainfall rather than operational rainfall forecasts.",
+    "Rainfall for X.173A uses X.90 basin weights because a separate X.173A Thiessen basin was not supplied.",
+    "The 2024-2025 observed Thiessen weight is too low for primary validation.",
+    "No calibrated prediction interval, approved warning threshold or approved rating curve is included.",
+    "Water-level telemetry must not be substituted for discharge without an approved rating curve."
+  ]
+}
