@@ -20,6 +20,7 @@
 - `index.html`
 - `shelters.json`
 - `data/telemetry.json`
+- `data/forecast-rain-history.json` (ประวัติฝนสำหรับเติม API และฝนย้อนหลังอัตโนมัติ)
 - `ref/`
 - `publish_telemetry.py`
 - `.github/workflows/publish-telemetry.yml`

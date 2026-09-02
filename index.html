@@ -380,6 +380,8 @@
     font-family:"IBM Plex Sans Thai",sans-serif;font-size:15px;font-weight:600;line-height:1.2;
     font-variant-numeric:tabular-nums}
   .forecastinputs input:focus{outline:2px solid rgba(0,173,239,.22);border-color:var(--brand)}
+  .forecastinputs small{font-size:9.5px;line-height:1.35;color:var(--muted);font-weight:400}
+  .forecastinputs small.ok{color:#167044}.forecastinputs small.warn{color:#9A6010}
   .forecastactions{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0 4px}
   .forecastactions button{border:0;border-radius:10px;padding:9px 13px;cursor:pointer;
     font:600 12.5px/1.2 "IBM Plex Sans Thai",sans-serif}
@@ -522,6 +524,7 @@
       </label>
       <label>API ณ วันออกพยากรณ์ (มม.)
         <input type="number" id="fcApi" min="0" step="0.1" inputmode="decimal" placeholder="API จากอนุกรมฝน">
+        <small id="fcApiStatus">กำลังอ่านประวัติฝน…</small>
       </label>
       <label>ฝน P(t−2) (มม./วัน)
         <input type="number" id="fcPm2" min="0" step="0.1" inputmode="decimal" placeholder="สองวันก่อน">
@@ -544,6 +547,7 @@
     </div>
     <div class="forecastactions">
       <button class="primary" id="fcRun">คำนวณ +1 ถึง +3 วัน</button>
+      <button class="secondary" id="fcAutoRain">เติม API และฝนย้อนหลังอัตโนมัติ</button>
       <button class="secondary" id="fcDry">สมมติฝนอนาคต 0</button>
       <button class="secondary" id="fcCsv" disabled>ดาวน์โหลด CSV</button>
       <button class="secondary" id="fcClear">ล้างค่า</button>
@@ -722,7 +726,7 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.0.7</span>
+    <span class="ver">Version 0.0.8</span>
     <div style="margin-top:13px">
       ต้นแบบเพื่อการออกแบบระบบ ยังไม่ผ่านการสอบทาน — ห้ามใช้ตัดสินใจอพยพจริง<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
@@ -1489,6 +1493,9 @@ document.addEventListener('keydown', e => {
    รับ Q, API, ฝนย้อนหลัง และฝนพยากรณ์รายวัน — ห้ามใช้ระดับน้ำแทน Q
    ========================================================================= */
 const FORECAST_CONFIG_URL = 'data/forecast-model.json';
+const FORECAST_RAIN_HISTORY_URL = 'data/forecast-rain-history.json';
+const FORECAST_DRAFT_KEY = 'hatyai-flood-forecast-draft-v1';
+const FORECAST_INPUT_IDS = ['fcDate','fcQ173','fcQ90','fcApi','fcPm2','fcPm1','fcP0','fcP1','fcP2','fcP3'];
 const RATING_CONFIG_URL = 'data/rating-tables.json';
 const RR_REFERENCE_URL = 'data/rainfall-runoff-reference.json';
 const FORECAST_CONFIG_FALLBACK = {
@@ -1515,6 +1522,8 @@ let FORECAST_CONFIG = FORECAST_CONFIG_FALLBACK;
 let RATING_CONFIG = null;
 let RR_REFERENCE = null;
 let LAST_FORECAST = null;
+let FORECAST_RAIN_HISTORY = null;
+let FORECAST_RAIN_BY_DATE = new Map();
 
 function localISODate(date) {
   const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, '0');
@@ -1536,6 +1545,77 @@ function requiredForecastNumber(id, label) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) throw new Error(`${label} ต้องเป็นเลขตั้งแต่ 0 ขึ้นไป`);
   return value;
+}
+
+function readForecastDraft() {
+  try { return JSON.parse(localStorage.getItem(FORECAST_DRAFT_KEY) || '{}'); }
+  catch (_) { return {}; }
+}
+
+function saveForecastDraft() {
+  try {
+    const draft = {};
+    FORECAST_INPUT_IDS.forEach(id => { if ($(id)) draft[id] = $(id).value; });
+    localStorage.setItem(FORECAST_DRAFT_KEY, JSON.stringify(draft));
+  } catch (_) { /* โหมดส่วนตัวอาจปิด localStorage; แบบฟอร์มยังใช้งานได้ตามปกติ */ }
+}
+
+function restoreForecastDraft() {
+  const draft = readForecastDraft();
+  FORECAST_INPUT_IDS.forEach(id => {
+    if ($(id) && typeof draft[id] === 'string' && draft[id] !== '') $(id).value = draft[id];
+  });
+}
+
+function setApiStatus(text, kind='') {
+  const el = $('fcApiStatus');
+  el.textContent = text;
+  el.className = kind;
+}
+
+function offsetISODate(base, offset) {
+  const d = new Date(`${base}T12:00:00+07:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + offset);
+  return localISODate(d);
+}
+
+function fillApiAndPastRain(showMissing=true) {
+  const date = $('fcDate').value;
+  const today = FORECAST_RAIN_BY_DATE.get(date);
+  const past1 = FORECAST_RAIN_BY_DATE.get(offsetISODate(date,-1));
+  const past2 = FORECAST_RAIN_BY_DATE.get(offsetISODate(date,-2));
+  if (today && past1 && past2) {
+    $('fcApi').value = today.api_mm;
+    $('fcPm2').value = past2.rain_mm;
+    $('fcPm1').value = past1.rain_mm;
+    $('fcP0').value = today.rain_mm;
+    const quality = Math.min(today.observed_weight_fraction,past1.observed_weight_fraction,past2.observed_weight_fraction);
+    const qualityNote = quality >= .5 ? 'ผ่านเกณฑ์แบบจำลอง' : 'ต่ำกว่าเกณฑ์ 50% โปรดตรวจสอบก่อนใช้';
+    setApiStatus(`เติมอัตโนมัติจากประวัติฝน · น้ำหนักข้อมูลต่ำสุด ${fmt(quality*100,0)}% · ${qualityNote}`,quality >= .5 ? 'ok' : 'warn');
+    saveForecastDraft();
+    return true;
+  }
+  if (showMissing) {
+    const period = FORECAST_RAIN_HISTORY && FORECAST_RAIN_HISTORY.period;
+    const range = period ? ` (${period.start} ถึง ${period.end})` : '';
+    setApiStatus(`ไม่มีประวัติฝนครบสำหรับวันที่นี้${range} · ระบบจะจำค่าที่กรอกไว้ในเครื่อง`,'warn');
+  }
+  return false;
+}
+
+async function loadForecastRainHistory() {
+  try {
+    const response = await fetch(FORECAST_RAIN_HISTORY_URL,{cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP '+response.status);
+    const payload = await response.json();
+    if (!payload || payload.schema !== 1 || !Array.isArray(payload.records)) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
+    FORECAST_RAIN_HISTORY = payload;
+    FORECAST_RAIN_BY_DATE = new Map(payload.records.map(row => [row.date,row]));
+    fillApiAndPastRain(false) || setApiStatus(`พร้อมเติมอัตโนมัติเมื่อเลือกวันที่ ${payload.period.start} ถึง ${payload.period.end}`);
+  } catch (error) {
+    setApiStatus(`อ่านประวัติฝนไม่ได้ · ระบบยังจำค่าที่กรอกไว้ในเครื่อง (${error.message})`,'warn');
+  }
 }
 
 function drawForecastChart(result) {
@@ -1681,6 +1761,8 @@ function clearForecast() {
   $('fcMessage').className = 'forecastmsg';
   $('fcMessage').textContent = 'กรอก Q, API และฝนเฉลี่ยลุ่มน้ำให้ครบ · API(t)=P(t)+0.88×API(t−1) · ห้ามใช้ระดับน้ำ ม.รทก. แทน Q';
   LAST_FORECAST = null;
+  try { localStorage.removeItem(FORECAST_DRAFT_KEY); } catch (_) {}
+  fillApiAndPastRain(true);
 }
 
 function downloadForecastCsv() {
@@ -1728,6 +1810,7 @@ function convertRating() {
   try{
     const a=ratingValue('X.173A','ratingH173'), b=ratingValue('X.90','ratingH90');
     $('fcQ173').value=a.q; $('fcQ90').value=b.q;
+    saveForecastDraft();
     $('ratingOut').innerHTML=`X.173A: ${fmt(a.h,3)} ม.รทก. → <b>${fmt(a.q,3)} ม³/วินาที</b><br>X.90: ${fmt(b.h,3)} ม.รทก. → <b>${fmt(b.q,3)} ม³/วินาที</b><br><span style="color:#9A6010">ใช้ตารางหมดช่วงใช้ 31 มี.ค. 2569 เป็นข้อมูลอ้างอิง</span>`;
   }catch(error){$('ratingOut').textContent=error.message||String(error);}
 }
@@ -1762,13 +1845,22 @@ async function loadRelationshipReference(){
 }
 
 $('fcDate').value = localISODate(new Date());
+restoreForecastDraft();
 $('fcRun').addEventListener('click', runForecast);
-$('fcDry').addEventListener('click', () => { ['fcP1','fcP2','fcP3'].forEach(id => $(id).value = '0'); });
+$('fcAutoRain').addEventListener('click', () => fillApiAndPastRain(true));
+$('fcDry').addEventListener('click', () => {
+  ['fcP1','fcP2','fcP3'].forEach(id => $(id).value = '0');
+  saveForecastDraft();
+});
 $('fcClear').addEventListener('click', clearForecast);
 $('fcCsv').addEventListener('click', downloadForecastCsv);
 $('ratingConvert').addEventListener('click',convertRating);
 $('ratingFromTelemetry').addEventListener('click',useTelemetryForRating);
+FORECAST_INPUT_IDS.forEach(id => $(id).addEventListener('input', saveForecastDraft));
+$('fcDate').addEventListener('change', () => fillApiAndPastRain(true));
+$('fcApi').addEventListener('input', () => setApiStatus('ใช้ค่าที่ปรับเอง · ระบบจำค่าไว้เฉพาะเบราว์เซอร์นี้','warn'));
 loadForecastConfig();
+loadForecastRainHistory();
 loadRatingConfig();
 loadRelationshipReference();
 
