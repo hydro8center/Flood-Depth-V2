@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const config = require('../data/forecast-model.json');
 const rating = require('../data/rating-tables.json');
+const unitHydrograph = require('../data/x90-unit-hydrograph.json');
 const model = require('../forecast-model.js');
 
 model.validateConfig(config);
@@ -65,4 +66,30 @@ assert.equal(hourly[71].horizon_day, 3);
 assert.equal(Number((hourly.slice(0, 24).reduce((sum, row) => sum + row.volume_x173a_mcm_hour, 0)).toFixed(6)),
   model.dailyVolumeMcm(representative.horizons[0].q_x173a_cms));
 
-console.log('direct-horizon forecast model tests: PASS');
+model.validateUnitHydrographConfig(unitHydrograph);
+assert.equal(unitHydrograph.rain_stations.length, 7);
+assert.equal(unitHydrograph.unit_hydrograph.peak_hour, 65);
+const uhDry = model.unitHydrographForecast(unitHydrograph, {
+  baseflowCms: 10,
+  runoffCoefficient: 0.2,
+  rainByDay: Array.from({length:6}, () => Array(7).fill(0))
+});
+assert.equal(uhDry.hourly.length, 72);
+assert.ok(uhDry.daily.every(row => row.volume_mcm_day === 0.864));
+assert.ok(uhDry.daily.every(row => row.mean_q_cms === 10 && row.peak_q_cms === 10));
+const uhRain = model.unitHydrographForecast(unitHydrograph, {
+  baseflowCms: 0,
+  runoffCoefficient: 0.2,
+  rainByDay: [
+    Array(7).fill(0), Array(7).fill(0), Array(7).fill(10),
+    Array(7).fill(0), Array(7).fill(0), Array(7).fill(0)
+  ]
+});
+assert.equal(uhRain.basin_rain_mm[2], 10);
+assert.equal(uhRain.effective_rain_mm[2], 2);
+assert.equal(uhRain.input_response_volume_mcm, 3.06862);
+assert.ok(uhRain.daily[0].volume_mcm_day > 0);
+assert.equal(Number(uhRain.hourly.reduce((sum,row)=>sum+row.total_volume_mcm_hour,0).toFixed(6)),
+  Number(uhRain.daily.reduce((sum,row)=>sum+row.volume_mcm_day,0).toFixed(6)));
+
+console.log('forecast model and X.90 unit hydrograph tests: PASS');

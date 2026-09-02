@@ -230,9 +230,94 @@
     })));
   }
 
+  function validateUnitHydrographConfig(config) {
+    if (!config || config.schema !== 1 || config.station !== 'X.90') {
+      throw new TypeError('X.90 unit hydrograph config is invalid');
+    }
+    const area = finiteNonNegative(config.basin_area_km2, 'basin_area_km2');
+    const stations = config.rain_stations;
+    const fractions = config.unit_hydrograph && config.unit_hydrograph.hourly_volume_fraction;
+    if (!area || !Array.isArray(stations) || stations.length < 2 || !Array.isArray(fractions) || !fractions.length) {
+      throw new TypeError('X.90 unit hydrograph config is incomplete');
+    }
+    const weightSum = stations.reduce((sum, station) => sum + finiteNonNegative(station.weight, 'rain station weight'), 0);
+    const fractionSum = fractions.reduce((sum, value) => sum + finiteNonNegative(value, 'unit hydrograph fraction'), 0);
+    if (Math.abs(weightSum - 1) > 0.001) throw new TypeError('rain station weights must sum to one');
+    if (Math.abs(fractionSum - 1) > 0.000001) throw new TypeError('unit hydrograph fractions must sum to one');
+    return config;
+  }
+
+  function unitHydrographForecast(config, input) {
+    validateUnitHydrographConfig(config);
+    const baseflowCms = finiteNonNegative(input.baseflowCms, 'baseflowCms');
+    const runoffCoefficient = finiteNonNegative(input.runoffCoefficient, 'runoffCoefficient');
+    if (runoffCoefficient > 1) throw new TypeError('runoffCoefficient must not exceed one');
+    const dayOffsets = [-2, -1, 0, 1, 2, 3];
+    if (!Array.isArray(input.rainByDay) || input.rainByDay.length !== dayOffsets.length) {
+      throw new TypeError('rainByDay must contain six daily station rows');
+    }
+    const rawWeights = config.rain_stations.map(station => Number(station.weight));
+    const rawWeightSum = rawWeights.reduce((sum, value) => sum + value, 0);
+    const weights = rawWeights.map(value => value / rawWeightSum);
+    const basinRain = input.rainByDay.map((row, dayIndex) => {
+      if (!Array.isArray(row) || row.length !== weights.length) {
+        throw new TypeError('rainByDay row ' + dayIndex + ' has the wrong station count');
+      }
+      return row.reduce((sum, value, stationIndex) =>
+        sum + finiteNonNegative(value, `rainByDay ${dayIndex} station ${stationIndex}`) * weights[stationIndex], 0);
+    });
+    const effectiveRain = basinRain.map(value => value * runoffCoefficient);
+    const areaVolumePerMm = Number(config.basin_area_km2) * 1000;
+    const fractions = config.unit_hydrograph.hourly_volume_fraction.map(Number);
+    const hourly = Array.from({ length:72 }, (_, outputHour) => {
+      const absoluteHour = 24 + outputHour;
+      let directVolumeM3 = 0;
+      dayOffsets.forEach((offset, dayIndex) => {
+        const lag = absoluteHour - offset * 24;
+        if (lag >= 0 && lag < fractions.length) {
+          directVolumeM3 += effectiveRain[dayIndex] * areaVolumePerMm * fractions[lag];
+        }
+      });
+      const qDirect = directVolumeM3 / 3600;
+      return {
+        hour_index: outputHour,
+        horizon_day: Math.floor(outputHour / 24) + 1,
+        hour_in_day: outputHour % 24,
+        q_direct_cms: Number(qDirect.toFixed(6)),
+        q_total_cms: Number((baseflowCms + qDirect).toFixed(6)),
+        direct_volume_mcm_hour: Number((directVolumeM3 / 1e6).toFixed(9)),
+        total_volume_mcm_hour: Number(((baseflowCms * 3600 + directVolumeM3) / 1e6).toFixed(9))
+      };
+    });
+    const daily = [1, 2, 3].map(day => {
+      const rows = hourly.filter(row => row.horizon_day === day);
+      return {
+        horizon_day: day,
+        volume_mcm_day: Number(rows.reduce((sum, row) => sum + row.total_volume_mcm_hour, 0).toFixed(6)),
+        direct_volume_mcm_day: Number(rows.reduce((sum, row) => sum + row.direct_volume_mcm_hour, 0).toFixed(6)),
+        mean_q_cms: Number((rows.reduce((sum, row) => sum + row.q_total_cms, 0) / 24).toFixed(3)),
+        peak_q_cms: Number(Math.max(...rows.map(row => row.q_total_cms)).toFixed(3))
+      };
+    });
+    return {
+      schema: 1,
+      method: 'x90_unit_hydrograph_convolution',
+      basin_area_km2: Number(config.basin_area_km2),
+      baseflow_cms: baseflowCms,
+      runoff_coefficient: runoffCoefficient,
+      basin_rain_mm: basinRain.map(value => Number(value.toFixed(3))),
+      effective_rain_mm: effectiveRain.map(value => Number(value.toFixed(3))),
+      input_response_volume_mcm: Number((effectiveRain.reduce((sum, value) => sum + value, 0) * areaVolumePerMm / 1e6).toFixed(6)),
+      forecast_window_direct_volume_mcm: Number(hourly.reduce((sum, row) => sum + row.direct_volume_mcm_hour, 0).toFixed(6)),
+      hourly,
+      daily
+    };
+  }
+
   return {
     cascadeForecast, directForecast, validateConfig,
     validateRatingConfig, stageToDischarge,
-    dailyVolumeMcm, hourlyVolumeMcm, expandHourlyForecast
+    dailyVolumeMcm, hourlyVolumeMcm, expandHourlyForecast,
+    validateUnitHydrographConfig, unitHydrographForecast
   };
 });

@@ -365,7 +365,7 @@
     border-radius:9px;padding:8px 15px;cursor:pointer;font:600 13px "IBM Plex Sans Thai",sans-serif}
   .lbcap{color:#B9D9E6;font-size:12px;text-align:center;max-width:560px}
 
-  /* ---- ต้นแบบคาดการณ์ Q X.173A → X.90 ---- */
+  /* ---- คาดการณ์น้ำท่าลุ่มน้ำ X.90 ---- */
   .forecast{margin-top:14px;background:linear-gradient(180deg,#F7FCFF 0,#fff 100%);
     border:1px solid #B7DDED;border-radius:16px;padding:15px;box-shadow:0 4px 14px rgba(12,77,105,.07)}
   .forecast .livehead{align-items:flex-start}
@@ -382,6 +382,27 @@
   .forecastinputs input:focus{outline:2px solid rgba(0,173,239,.22);border-color:var(--brand)}
   .forecastinputs small{font-size:9.5px;line-height:1.35;color:var(--muted);font-weight:400}
   .forecastinputs small.ok{color:#167044}.forecastinputs small.warn{color:#9A6010}
+  .basinlayout{display:grid;grid-template-columns:1fr;gap:12px;margin:13px 0}
+  #basinMap{height:330px;border:1px solid var(--line);border-radius:13px;background:#EAF4F7}
+  .basinmeta{background:#F7FBFD;border:1px solid var(--line2);border-radius:13px;padding:12px;font-size:12px;line-height:1.65;color:var(--muted)}
+  .basinmeta b{color:var(--ink)}
+  .rainentry{margin-top:15px}.rainentry h3{margin:0 0 4px;font:600 14px/1.4 "IBM Plex Sans Thai",sans-serif}
+  .raintablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:8px}
+  .raintable{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:11px}
+  .raintable th,.raintable td{padding:7px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);text-align:center;white-space:nowrap}
+  .raintable th{background:#EDF6FA;color:#34515F;font-weight:600;position:sticky;top:0;z-index:2}
+  .raintable th:first-child,.raintable td:first-child{position:sticky;left:0;z-index:1;background:#fff;text-align:left;min-width:205px}
+  .raintable th:first-child{z-index:3;background:#DCEEF5}.raintable tr:last-child td{border-bottom:0}
+  .raintable input{width:72px;border:1px solid var(--line);border-radius:8px;padding:7px;text-align:right;font:500 12px "Sarabun",sans-serif}
+  .raintable input:focus{outline:2px solid rgba(0,173,239,.2);border-color:var(--brand)}
+  .stationname{display:block;color:var(--ink);font-weight:600}.stationweight{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}
+  .rainsummary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+  .rainsummary span{background:#F0F7FA;border-radius:9px;padding:7px;text-align:center;font-size:10px;color:var(--muted)}
+  .rainsummary b{display:block;color:#075D84;font-size:13px;margin-top:2px}
+  .uhchart{display:block;width:100%;height:auto;min-height:240px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+  .definitiongrid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+  .definitiongrid div{border-left:3px solid var(--brand);padding:7px 10px;background:#F6FBFD;border-radius:0 9px 9px 0}
+  .definitiongrid b{display:block;margin-bottom:2px}
   .forecastactions{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0 4px}
   .forecastactions button{border:0;border-radius:10px;padding:9px 13px;cursor:pointer;
     font:600 12.5px/1.2 "IBM Plex Sans Thai",sans-serif}
@@ -421,6 +442,7 @@
     color:#685319;font-size:11.5px;line-height:1.6;margin-top:11px}
   @media(min-width:600px){.forecastinputs{grid-template-columns:repeat(5,minmax(0,1fr))}
     .forecastinputs label.wide{grid-column:auto}.forecast{padding:18px}.plotgrid{grid-template-columns:1fr 1fr}.forecastsummary{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:760px){.basinlayout{grid-template-columns:minmax(0,1.55fr) minmax(250px,.75fr)}.definitiongrid{grid-template-columns:1fr 1fr}.rainsummary{grid-template-columns:repeat(6,1fr)}}
   .forecastrefs .plotgrid{grid-template-columns:1fr}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -432,7 +454,7 @@
   <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
   <div class="ht">
     <h1>น้ำจะท่วมตรงนี้สูงเท่าไหร่</h1>
-    <span>ต้นแบบ · หาดใหญ่ จ.สงขลา</span>
+    <span>หาดใหญ่ จ.สงขลา</span>
   </div>
 </div></header>
 
@@ -493,92 +515,60 @@
   <section class="forecast" id="forecastCard">
     <div class="livehead">
       <div>
-        <h2>ต้นแบบคาดการณ์ปริมาณน้ำ X.173A และ X.90</h2>
-        <p class="forecastlead">Direct-horizon model แบบรายวัน แยกสมการ <b>+1/+2/+3 วัน</b>
-          พร้อมค่า persistence และ RMSE อ้างอิง โดยแยกจากระดับน้ำโทรมาตรอย่างชัดเจน</p>
+        <h2>คาดการณ์น้ำท่าลุ่มน้ำสถานี X.90</h2>
+        <p class="forecastlead">กรอกฝนรายวันของสถานีในลุ่มน้ำ ระบบจะถ่วงน้ำหนักตามพื้นที่
+          แล้วจำลอง Hydrograph รายชั่วโมงด้วย Unit Hydrograph ก่อนรวมเป็นปริมาตรรายวัน</p>
       </div>
-      <span class="pill old" id="forecastPill">ต้นแบบ</span>
+      <span class="pill" id="forecastPill">Unit Hydrograph</span>
+    </div>
+    <div class="basinlayout">
+      <div id="basinMap" aria-label="แผนผังพื้นที่รับน้ำและสถานีฝนลุ่มน้ำ X.90"></div>
+      <div class="basinmeta" id="basinMeta">กำลังอ่านข้อมูลพื้นที่รับน้ำและสถานีฝน…</div>
     </div>
     <div class="ratingbox">
-      <h3>แปลงระดับน้ำเป็น Q จาก Rating Table ปี 2025</h3>
-      <p id="ratingMeta">กำลังอ่านตาราง X.173A และ X.90…</p>
+      <h3>กำหนดน้ำท่าพื้นฐาน X.90</h3>
+      <p id="ratingMeta">กำลังอ่าน Rating Table X.90…</p>
       <div class="ratinggrid">
-        <label>ระดับ X.173A (ม.รทก.)<input id="ratingH173" type="number" step="0.001" inputmode="decimal" placeholder="9.40–18.00"></label>
         <label>ระดับ X.90 (ม.รทก.)<input id="ratingH90" type="number" step="0.001" inputmode="decimal" placeholder="2.00–13.05"></label>
+        <label>Q พื้นฐาน (ม³/วินาที)<input id="fcBaseflow" type="number" min="0" step="0.01" inputmode="decimal" value="0" placeholder="0"></label>
       </div>
       <div class="forecastactions">
         <button class="secondary" id="ratingFromTelemetry">ใช้ระดับล่าสุดจากโทรมาตร</button>
-        <button class="secondary" id="ratingConvert">แปลงและใส่ค่า Q</button>
+        <button class="secondary" id="ratingConvert">แปลงระดับเป็น Q พื้นฐาน</button>
       </div>
-      <p class="ratingout" id="ratingOut">ระบบไม่ประมาณค่านอกช่วง Rating Table และจะไม่ใส่ Q ให้อัตโนมัติจนกดปุ่มแปลง</p>
+      <p class="ratingout" id="ratingOut">ถ้าต้องการคำนวณเฉพาะน้ำที่เกิดจากฝน ให้ใช้ Q พื้นฐาน = 0</p>
     </div>
     <div class="forecastinputs">
       <label>วันที่ออกคำพยากรณ์
         <input type="date" id="fcDate">
       </label>
-      <label>Q ปัจจุบัน X.173A (ม³/วินาที)
-        <input type="number" id="fcQ173" min="0" step="0.01" inputmode="decimal" placeholder="กรอกค่า Q">
-      </label>
-      <label>Q ปัจจุบัน X.90 (ม³/วินาที)
-        <input type="number" id="fcQ90" min="0" step="0.01" inputmode="decimal" placeholder="กรอกค่า Q">
-      </label>
-      <label>API ณ วันออกพยากรณ์ (มม.)
-        <input type="number" id="fcApi" min="0" step="0.1" inputmode="decimal" placeholder="API จากอนุกรมฝน">
-        <small id="fcApiStatus">กำลังอ่านประวัติฝน…</small>
-      </label>
-      <label>ฝน P(t−2) (มม./วัน)
-        <input type="number" id="fcPm2" min="0" step="0.1" inputmode="decimal" placeholder="สองวันก่อน">
-      </label>
-      <label>ฝน P(t−1) (มม./วัน)
-        <input type="number" id="fcPm1" min="0" step="0.1" inputmode="decimal" placeholder="เมื่อวาน">
-      </label>
-      <label>ฝน P(t) (มม./วัน)
-        <input type="number" id="fcP0" min="0" step="0.1" inputmode="decimal" placeholder="วันนี้">
-      </label>
-      <label>ฝนคาดการณ์ P(t+1) (มม./วัน)
-        <input type="number" id="fcP1" min="0" step="0.1" inputmode="decimal" placeholder="วันถัดไป">
-      </label>
-      <label>ฝนคาดการณ์ P(t+2) (มม./วัน)
-        <input type="number" id="fcP2" min="0" step="0.1" inputmode="decimal" placeholder="สองวันถัดไป">
-      </label>
-      <label>ฝนคาดการณ์ P(t+3) (มม./วัน)
-        <input type="number" id="fcP3" min="0" step="0.1" inputmode="decimal" placeholder="สามวันถัดไป">
+      <label>สัมประสิทธิ์น้ำท่า C (0–1)
+        <input type="number" id="fcRunoffCoeff" min="0" max="1" step="0.001" inputmode="decimal" placeholder="0.183">
+        <small id="fcCoeffStatus">กำลังอ่านค่าจากเหตุการณ์ฤดูฝน…</small>
       </label>
     </div>
+    <section class="rainentry">
+      <h3>ฝนรายวันแยกตามสถานี (มม./วัน)</h3>
+      <p class="chartcaveat">คลิกเครื่องหมายสถานีบนแผนที่เพื่อเลื่อนไปยังแถวของสถานีนั้น ค่าเฉลี่ยลุ่มน้ำคำนวณด้วยน้ำหนัก Thiessen</p>
+      <div class="raintablewrap"><table class="raintable" id="rainInputTable"></table></div>
+      <div class="rainsummary" id="basinRainSummary"></div>
+    </section>
     <div class="forecastactions">
-      <button class="primary" id="fcRun">คำนวณ +1 ถึง +3 วัน</button>
-      <button class="secondary" id="fcAutoRain">เติม API และฝนย้อนหลังอัตโนมัติ</button>
-      <button class="secondary" id="fcDry">สมมติฝนอนาคต 0</button>
+      <button class="primary" id="fcRun">จำลอง Hydrograph 72 ชั่วโมง</button>
+      <button class="secondary" id="fcAutoRain">เติมฝนย้อนหลังจากค่าเฉลี่ยลุ่มน้ำ</button>
+      <button class="secondary" id="fcDry">กำหนดฝนอนาคตเป็น 0</button>
       <button class="secondary" id="fcCsv" disabled>ดาวน์โหลด CSV</button>
       <button class="secondary" id="fcClear">ล้างค่า</button>
     </div>
-    <p class="forecastmsg" id="fcMessage">กรอก Q, API และฝนเฉลี่ยลุ่มน้ำให้ครบ · API(t)=P(t)+0.88×API(t−1) · ห้ามใช้ระดับน้ำ ม.รทก. แทน Q</p>
+    <p class="forecastmsg" id="fcMessage">กรอกฝนของแต่ละสถานี แล้วกดจำลอง Hydrograph</p>
     <div class="forecastresults" id="fcResults">
       <div class="forecastsummary" id="fcSummary"></div>
-      <svg class="forecastchart" id="fcChart" viewBox="0 0 620 220" role="img"
-        aria-label="กราฟปริมาณน้ำตรวจวัดเริ่มต้นและค่าคาดการณ์ X.173A กับ X.90"></svg>
-      <div class="forecastlegend"><span><i style="background:#00ADEF"></i>X.173A</span>
-        <span><i style="background:#F09C13"></i>X.90</span><span>เส้นประ = persistence</span></div>
-      <table class="forecasttable"><thead><tr><th>วันคาดการณ์</th><th>X.173A</th><th>X.90</th></tr></thead>
+      <svg class="uhchart" id="fcHydroChart" viewBox="0 0 700 300" role="img" aria-label="Hydrograph รายชั่วโมง X.90"></svg>
+      <div class="forecastlegend"><span><i style="background:#087FA8"></i>อัตราการไหลรวม X.90</span><span><i style="background:#8CCFE6"></i>น้ำท่าจากฝน</span></div>
+      <table class="forecasttable"><thead><tr><th>วันคาดการณ์</th><th>ฝนเฉลี่ยลุ่มน้ำ</th><th>Q เฉลี่ย / สูงสุด</th><th>ปริมาตร</th></tr></thead>
         <tbody id="fcTable"></tbody></table>
-      <section class="hourlyplots">
-        <h3>กราฟกระจายผลรายวันเป็นรายชั่วโมง</h3>
-        <p class="chartcaveat">ค่ารายชั่วโมงเป็นการทำซ้ำค่าเฉลี่ยรายวัน 24 ชั่วโมง เพื่อแสดงปริมาตรตามเวลา ไม่ใช่แบบจำลองยอดน้ำรายชั่วโมง</p>
-        <div class="plotgrid">
-          <div class="plotcard"><b>X.173A · 72 ชั่วโมง</b><svg id="fcHourly173" class="hourlychart" viewBox="0 0 600 220" role="img" aria-label="กราฟคาดการณ์รายชั่วโมง X.173A"></svg></div>
-          <div class="plotcard"><b>X.90 · 72 ชั่วโมง</b><svg id="fcHourly90" class="hourlychart" viewBox="0 0 600 220" role="img" aria-label="กราฟคาดการณ์รายชั่วโมง X.90"></svg></div>
-        </div>
-      </section>
       <p class="modelnote" id="fcModelNote"></p>
     </div>
-    <section class="forecastrefs">
-      <h3>กราฟความสัมพันธ์น้ำฝน–น้ำท่ารายเหตุการณ์ (เอกสารอ้างอิง)</h3>
-      <p class="refmethod" id="rrMethod">กำลังอ่านข้อมูลความสัมพันธ์…</p>
-      <div class="plotgrid">
-        <div class="plotcard"><b>X.173A</b><p class="chartcaveat" id="rrFilter173"></p><svg id="rr173" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.173A"></svg><p class="equation" id="rrEq173"></p></div>
-        <div class="plotcard"><b>X.90</b><p class="chartcaveat" id="rrFilter90"></p><svg id="rr90" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.90"></svg><p class="equation" id="rrEq90"></p></div>
-      </div>
-    </section>
   </section>
 </div>
 
@@ -698,18 +688,29 @@
 
 <div class="tab" id="tab-info">
   <details><summary>คำนวณมาจากอะไร</summary><div class="dbody" id="method"></div></details>
-  <details><summary>แบบจำลองคาดการณ์ X.173A และ X.90</summary><div class="dbody">
-    <p><b>ต้นแบบ Direct-horizon รายวัน</b> ใช้สมการแยกสำหรับ +1/+2/+3 วัน
-      รับ Q ล่าสุด, API ณ จุดตั้งต้น, ฝนย้อนหลัง 3 วัน และฝนพยากรณ์ถึงวันเป้าหมาย
-      โดยบังคับผลคาดการณ์ไม่ให้ต่ำกว่า 0 ม³/วินาที</p>
-    <p>แบ่งข้อมูล train/test ตามเวลา 80/20 และใช้เฉพาะวันซึ่งมีสัดส่วนน้ำหนักสถานีฝนที่วัดจริงอย่างน้อย 50%
-      หน้าเว็บแสดง persistence baseline และ test RMSE ควบคู่กับค่าคาดการณ์</p>
-    <p><b>ข้อจำกัดของผลประเมิน:</b> hindcast ใช้ฝนอนาคตที่สังเกตได้จริงแทนฝนพยากรณ์
-      และฝนของ X.173A ยังใช้น้ำหนักลุ่ม X.90 เพราะไม่มี Thiessen ของลุ่มย่อยแยกต่างหาก</p>
-    <p><b>ข้อควรระวัง:</b> แบบจำลองนี้ใช้ปริมาณน้ำ Q (ม³/วินาที) ไม่ใช่ระดับน้ำโทรมาตร (ม.รทก.)
-      แท็บคาดการณ์จึงแปลงระดับด้วย Rating Table ของกรมชลประทานก่อน และไม่ประมาณค่านอกช่วงตาราง
-      ตารางที่ได้รับมีช่วงใช้ 1 เม.ย. 2568–31 มี.ค. 2569 หลังจากนั้นให้ใช้เป็นข้อมูลอ้างอิงจนกว่าจะได้รับฉบับใหม่
-      ผลลัพธ์เป็นต้นแบบเพื่อการพัฒนา ไม่ใช่คำเตือนภัยทางการ</p>
+  <details><summary>วิธีคำนวณ Unit Hydrograph ของ X.90</summary><div class="dbody" id="uhInfo">
+    <p>ระบบหาฝนเฉลี่ยลุ่มน้ำจากสถานี 7 จุดด้วยน้ำหนัก Thiessen แล้วคูณสัมประสิทธิ์น้ำท่าเพื่อเป็นฝนส่วนเกิน
+      น้ำ 1 มม. บนพื้นที่รับน้ำ 1,534.31 ตร.กม. มีปริมาตร 1.53431 ล้าน ลบ.ม.</p>
+    <p>รูปทรงตอบสนองสร้างจากเหตุการณ์ฤดูฝนของ X.90 โดยประมาณน้ำท่าเหนือ baseflow
+      แล้วหาค่าสัมประสิทธิ์ lag ที่ไม่ติดลบ จากนั้นปรับพื้นที่ใต้กราฟให้รวมเป็นหนึ่งหน่วยและกระจายเป็นรายชั่วโมง
+      ค่ารายวันเกิดจากผลรวมปริมาตร 24 ชั่วโมง ไม่ได้คำนวณจาก Q สูงสุดของวัน</p>
+    <div class="definitiongrid">
+      <div><b>Unit Hydrograph</b>กราฟอัตราการไหลที่เกิดจากฝนส่วนเกิน 1 มม. กระจายสม่ำเสมอทั่วลุ่มน้ำ</div>
+      <div><b>ฝนเฉลี่ยลุ่มน้ำ</b>ผลรวมฝนแต่ละสถานีคูณน้ำหนักพื้นที่ Thiessen ของสถานีนั้น</div>
+      <div><b>ฝนส่วนเกิน</b>ส่วนของฝนที่เปลี่ยนเป็นน้ำท่าโดยตรง คำนวณจากฝนเฉลี่ยลุ่มน้ำ × สัมประสิทธิ์น้ำท่า</div>
+      <div><b>สัมประสิทธิ์น้ำท่า (C)</b>สัดส่วนฝนที่กลายเป็นน้ำท่าโดยตรง ค่าเริ่มต้นมาจากมัธยฐานเหตุการณ์ฤดูฝน</div>
+      <div><b>Q พื้นฐาน</b>อัตราการไหลที่มีอยู่ก่อนผลจากฝนชุดใหม่ และบวกคงที่ตลอดช่วงจำลอง</div>
+      <div><b>ปริมาตรรายวัน</b>ผลรวม Q รายชั่วโมง × 3,600 วินาที แล้วแปลงเป็นล้าน ลบ.ม.</div>
+    </div>
+    <div class="warn"><b>ข้อจำกัด</b> ข้อมูลสอบเทียบต้นทางเป็นรายวัน รูปทรงรายชั่วโมงจึงเป็นโครงร่างสำหรับกระจายปริมาตร
+      ไม่ใช่การสอบเทียบยอดน้ำรายชั่วโมง และวงกลมบนแผนที่เป็นพื้นที่เทียบเท่า ไม่ใช่แนวเขตลุ่มน้ำทางการ</div>
+  </div></details>
+  <details><summary>กราฟความสัมพันธ์น้ำฝน–น้ำท่ารายเหตุการณ์</summary><div class="dbody">
+    <p class="refmethod" id="rrMethod">กำลังอ่านข้อมูลความสัมพันธ์…</p>
+    <div class="plotgrid">
+      <div class="plotcard"><b>X.173A</b><p class="chartcaveat" id="rrFilter173"></p><svg id="rr173" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.173A"></svg><p class="equation" id="rrEq173"></p></div>
+      <div class="plotcard"><b>X.90</b><p class="chartcaveat" id="rrFilter90"></p><svg id="rr90" class="scatterchart" viewBox="0 0 600 400" role="img" aria-label="กราฟความสัมพันธ์ฝนและน้ำท่า X.90"></svg><p class="equation" id="rrEq90"></p></div>
+    </div>
   </div></details>
   <details id="refDetails"><summary>เอกสารอ้างอิง (33 หน้า)</summary>
     <div class="dbody">
@@ -726,9 +727,9 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.0.8</span>
+    <span class="ver">Version 0.1.0</span>
     <div style="margin-top:13px">
-      ต้นแบบเพื่อการออกแบบระบบ ยังไม่ผ่านการสอบทาน — ห้ามใช้ตัดสินใจอพยพจริง<br>
+      ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย — โปรดตรวจสอบกับประกาศทางการ<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
     </div>
   </footer>
@@ -1489,13 +1490,14 @@ document.addEventListener('keydown', e => {
 
 
 /* =========================================================================
-   ต้นแบบ direct-horizon ปริมาณน้ำรายวัน X.173A และ X.90
+   แบบจำลองเดิม direct-horizon (เก็บไว้เพื่ออ่านไฟล์รุ่นก่อน)
    รับ Q, API, ฝนย้อนหลัง และฝนพยากรณ์รายวัน — ห้ามใช้ระดับน้ำแทน Q
    ========================================================================= */
 const FORECAST_CONFIG_URL = 'data/forecast-model.json';
 const FORECAST_RAIN_HISTORY_URL = 'data/forecast-rain-history.json';
-const FORECAST_DRAFT_KEY = 'hatyai-flood-forecast-draft-v1';
-const FORECAST_INPUT_IDS = ['fcDate','fcQ173','fcQ90','fcApi','fcPm2','fcPm1','fcP0','fcP1','fcP2','fcP3'];
+const UNIT_HYDROGRAPH_URL = 'data/x90-unit-hydrograph.json';
+const FORECAST_DRAFT_KEY = 'hatyai-x90-unit-hydrograph-draft-v1';
+const FORECAST_INPUT_IDS = ['fcDate','fcBaseflow','fcRunoffCoeff'];
 const RATING_CONFIG_URL = 'data/rating-tables.json';
 const RR_REFERENCE_URL = 'data/rainfall-runoff-reference.json';
 const FORECAST_CONFIG_FALLBACK = {
@@ -1524,6 +1526,10 @@ let RR_REFERENCE = null;
 let LAST_FORECAST = null;
 let FORECAST_RAIN_HISTORY = null;
 let FORECAST_RAIN_BY_DATE = new Map();
+let UNIT_HYDROGRAPH_CONFIG = null;
+let LAST_UH_FORECAST = null;
+let BASIN_MAP = null;
+let UNIT_THIESSEN = null;
 
 function localISODate(date) {
   const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, '0');
@@ -1844,24 +1850,243 @@ async function loadRelationshipReference(){
   }catch(error){$('rrMethod').textContent='โหลดกราฟอ้างอิงไม่สำเร็จ: '+error.message;}
 }
 
-$('fcDate').value = localISODate(new Date());
-restoreForecastDraft();
-$('fcRun').addEventListener('click', runForecast);
-$('fcAutoRain').addEventListener('click', () => fillApiAndPastRain(true));
-$('fcDry').addEventListener('click', () => {
-  ['fcP1','fcP2','fcP3'].forEach(id => $(id).value = '0');
-  saveForecastDraft();
-});
-$('fcClear').addEventListener('click', clearForecast);
-$('fcCsv').addEventListener('click', downloadForecastCsv);
-$('ratingConvert').addEventListener('click',convertRating);
-$('ratingFromTelemetry').addEventListener('click',useTelemetryForRating);
-FORECAST_INPUT_IDS.forEach(id => $(id).addEventListener('input', saveForecastDraft));
-$('fcDate').addEventListener('change', () => fillApiAndPastRain(true));
-$('fcApi').addEventListener('input', () => setApiStatus('ใช้ค่าที่ปรับเอง · ระบบจำค่าไว้เฉพาะเบราว์เซอร์นี้','warn'));
-loadForecastConfig();
-loadForecastRainHistory();
-loadRatingConfig();
+/* ---------- X.90 Unit Hydrograph จากฝนรายสถานี ---------- */
+const UH_DAYS=[
+  {offset:-2,label:'P(t−2)'},{offset:-1,label:'P(t−1)'},{offset:0,label:'P(t)'},
+  {offset:1,label:'P(t+1)'},{offset:2,label:'P(t+2)'},{offset:3,label:'P(t+3)'}
+];
+const BASIN_COLORS=['#1777B7','#22A699','#F09C13','#8D6BC4','#3D9C5D','#D65C5C','#4F86D9'];
+
+function rainInputId(stationIndex,dayIndex){return `rain-${stationIndex}-${dayIndex}`;}
+
+function readUhDraft(){
+  try{return JSON.parse(localStorage.getItem(FORECAST_DRAFT_KEY)||'{}');}catch(_){return {};}
+}
+
+function saveUhDraft(){
+  if(!UNIT_HYDROGRAPH_CONFIG)return;
+  try{
+    const rain=UNIT_HYDROGRAPH_CONFIG.rain_stations.map((_,stationIndex)=>
+      UH_DAYS.map((__,dayIndex)=>$(rainInputId(stationIndex,dayIndex)).value));
+    localStorage.setItem(FORECAST_DRAFT_KEY,JSON.stringify({
+      date:$('fcDate').value,baseflow:$('fcBaseflow').value,coefficient:$('fcRunoffCoeff').value,rain
+    }));
+  }catch(_){}
+}
+
+function restoreUhDraft(){
+  const draft=readUhDraft();
+  if(draft.date)$('fcDate').value=draft.date;
+  if(draft.baseflow!==undefined)$('fcBaseflow').value=draft.baseflow;
+  if(draft.coefficient!==undefined&&draft.coefficient!=='')$('fcRunoffCoeff').value=draft.coefficient;
+  if(Array.isArray(draft.rain))draft.rain.forEach((row,stationIndex)=>
+    Array.isArray(row)&&row.forEach((value,dayIndex)=>{
+      const input=$(rainInputId(stationIndex,dayIndex));if(input&&value!=='')input.value=value;
+    }));
+}
+
+function updateRainDayHeaders(){
+  if(!$('fcDate').value)return;
+  UH_DAYS.forEach((day,index)=>{
+    const date=forecastDate($('fcDate').value,day.offset);
+    const el=$(`rainDayHead${index}`);if(el)el.innerHTML=`${day.label}<br><small>${date.label}</small>`;
+  });
+}
+
+function readRainMatrix(blankAsZero=true){
+  if(!UNIT_HYDROGRAPH_CONFIG)throw new Error('ยังโหลดข้อมูลสถานีฝนไม่สำเร็จ');
+  return UNIT_HYDROGRAPH_CONFIG.rain_stations.map((station,stationIndex)=>
+    UH_DAYS.map((_,dayIndex)=>{
+      const raw=$(rainInputId(stationIndex,dayIndex)).value.trim();
+      if(raw===''&&!blankAsZero)throw new Error(`กรุณากรอกฝน ${station.name} ให้ครบ`);
+      const value=raw===''?0:Number(raw);
+      if(!Number.isFinite(value)||value<0)throw new Error(`ฝน ${station.name} ต้องเป็นเลขตั้งแต่ 0 ขึ้นไป`);
+      return value;
+    }));
+}
+
+function weightedBasinRain(matrix){
+  const weights=UNIT_HYDROGRAPH_CONFIG.rain_stations.map(station=>Number(station.weight));
+  const sum=weights.reduce((a,b)=>a+b,0);
+  return UH_DAYS.map((_,dayIndex)=>matrix.reduce((total,row,stationIndex)=>total+row[dayIndex]*weights[stationIndex]/sum,0));
+}
+
+function updateBasinRainSummary(){
+  if(!UNIT_HYDROGRAPH_CONFIG)return;
+  const rain=weightedBasinRain(readRainMatrix(true));
+  $('basinRainSummary').innerHTML=rain.map((value,index)=>
+    `<span>${UH_DAYS[index].label}<b>${fmt(value,1)} มม.</b></span>`).join('');
+}
+
+function buildRainInputTable(){
+  const stations=UNIT_HYDROGRAPH_CONFIG.rain_stations;
+  $('rainInputTable').innerHTML=`<thead><tr><th>สถานี / น้ำหนักพื้นที่</th>${UH_DAYS.map((_,index)=>
+    `<th id="rainDayHead${index}"></th>`).join('')}</tr></thead><tbody>${stations.map((station,stationIndex)=>
+      `<tr id="rainRow${stationIndex}"><td><span class="stationname">${station.name}</span><span class="stationweight">รหัส ${station.code||'—'} · ${fmt(station.weight*100,2)}% · ${fmt(station.polygon_area_km2,1)} ตร.กม.</span></td>${UH_DAYS.map((_,dayIndex)=>
+        `<td><input id="${rainInputId(stationIndex,dayIndex)}" type="number" min="0" step="0.1" inputmode="decimal" value="0" aria-label="ฝน ${station.name} ${UH_DAYS[dayIndex].label}"></td>`).join('')}</tr>`).join('')}</tbody>`;
+  document.querySelectorAll('#rainInputTable input').forEach(input=>input.addEventListener('input',()=>{updateBasinRainSummary();saveUhDraft();}));
+  restoreUhDraft();updateRainDayHeaders();updateBasinRainSummary();
+}
+
+async function loadRainArchive(){
+  try{
+    const response=await fetch(FORECAST_RAIN_HISTORY_URL,{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);
+    FORECAST_RAIN_HISTORY=await response.json();
+    FORECAST_RAIN_BY_DATE=new Map(FORECAST_RAIN_HISTORY.records.map(row=>[row.date,row]));
+  }catch(error){$('fcMessage').textContent='อ่านประวัติฝนเฉลี่ยลุ่มน้ำไม่ได้: '+error.message;}
+}
+
+function fillHistoricBasinRain(){
+  const date=$('fcDate').value,rows=[-2,-1,0].map(offset=>FORECAST_RAIN_BY_DATE.get(offsetISODate(date,offset)));
+  if(rows.some(row=>!row)){
+    const period=FORECAST_RAIN_HISTORY&&FORECAST_RAIN_HISTORY.period;
+    $('fcMessage').className='forecastmsg bad';
+    $('fcMessage').textContent=`ไม่มีฝนเฉลี่ยลุ่มน้ำครบ 3 วัน${period?` (ข้อมูล ${period.start} ถึง ${period.end})`:''}`;return;
+  }
+  UNIT_HYDROGRAPH_CONFIG.rain_stations.forEach((_,stationIndex)=>rows.forEach((row,dayIndex)=>{
+    $(rainInputId(stationIndex,dayIndex)).value=row.rain_mm;
+  }));
+  const minQuality=Math.min(...rows.map(row=>row.observed_weight_fraction));
+  $('fcMessage').className=minQuality>=.5?'forecastmsg':'forecastmsg bad';
+  $('fcMessage').textContent=`เติมค่าเฉลี่ยลุ่มน้ำซ้ำทุกสถานีเพื่อให้ค่าเฉลี่ยรวมตรงกับประวัติ · คุณภาพต่ำสุด ${fmt(minQuality*100,0)}% · ควรแทนด้วยค่ารายสถานีเมื่อมีข้อมูล`;
+  updateBasinRainSummary();saveUhDraft();
+}
+
+function zeroFutureRain(){
+  UNIT_HYDROGRAPH_CONFIG.rain_stations.forEach((_,stationIndex)=>[3,4,5].forEach(dayIndex=>{
+    $(rainInputId(stationIndex,dayIndex)).value='0';
+  }));
+  updateBasinRainSummary();saveUhDraft();
+}
+
+function ensureBasinMap(){
+  if(BASIN_MAP||!UNIT_HYDROGRAPH_CONFIG||!UNIT_THIESSEN)return;
+  let stage='สร้างกรอบแผนที่';
+  try{
+    BASIN_MAP=L.map('basinMap',{scrollWheelZoom:false,attributionControl:true,zoomControl:true});
+    // Establish the view before adding vector layers so Leaflet has a valid
+    // pixel origin when it creates SVG renderers.
+    BASIN_MAP.setView([6.70935,100.40023],9);
+    stage='เพิ่มแผนที่ฐาน';
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      maxZoom:18,attribution:'&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(BASIN_MAP);
+    stage='เพิ่มโพลิกอน Thiessen';
+    const layer=L.geoJSON(UNIT_THIESSEN,{style:feature=>({
+      color:BASIN_COLORS[feature.properties.station_index%BASIN_COLORS.length],weight:2,fillOpacity:.18
+    }),onEachFeature:(feature,polygon)=>polygon.bindPopup(`<b>${feature.properties.name}</b><br>พื้นที่ ${fmt(feature.properties.polygon_area_km2,1)} ตร.กม.<br>น้ำหนัก ${fmt(feature.properties.weight*100,2)}%`)}).addTo(BASIN_MAP);
+    stage='เพิ่มจุดสถานีฝน';
+    UNIT_HYDROGRAPH_CONFIG.rain_stations.forEach((station,index)=>{
+      const marker=L.circleMarker([station.latitude,station.longitude],{
+        radius:station.name==='X.90'?8:6,color:'#fff',weight:2,fillColor:BASIN_COLORS[index%BASIN_COLORS.length],fillOpacity:1
+      }).bindPopup(`<b>${station.name}</b><br>รหัส ${station.code||'—'} · น้ำหนัก ${fmt(station.weight*100,2)}%`).addTo(BASIN_MAP);
+      marker.on('click',()=>{const row=$(`rainRow${index}`);row&&row.scrollIntoView({behavior:'smooth',block:'center'});row&&row.animate([{background:'#FFF2C9'},{background:'#fff'}],{duration:1600});});
+    });
+    stage='จัดขอบเขตแผนที่';
+    // The fixed view above covers the validated WGS84 Thiessen extent.
+  }catch(error){
+    if(BASIN_MAP){try{BASIN_MAP.remove();}catch(_){}BASIN_MAP=null;}
+    const message=`แสดงแผนที่ไม่สำเร็จ (${stage}): ${error.message}`;
+    $('basinMeta').insertAdjacentHTML('beforeend',`<br><br><span style="color:#A3261A">${message}</span>`);
+    console.error(message,error);
+  }
+}
+
+function drawUhHydrograph(rows){
+  const svg=$('fcHydroChart'),W=700,H=300,left=58,right=18,top=20,bottom=45;
+  const total=rows.map(row=>row.q_total_cms),direct=rows.map(row=>row.q_direct_cms);
+  const max=Math.max(1,...total)*1.12,x=index=>left+index*(W-left-right)/71,y=value=>top+(max-value)/max*(H-top-bottom);
+  const path=values=>values.map((value,index)=>`${index?'L':'M'}${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
+  let grid='';for(let i=0;i<=4;i++){const value=max*(4-i)/4,yy=top+i*(H-top-bottom)/4;grid+=`<line x1="${left}" y1="${yy}" x2="${W-right}" y2="${yy}" stroke="#DDEAF0"/><text x="${left-7}" y="${yy+4}" text-anchor="end" fill="#607580" font-size="10">${fmt(value,0)}</text>`;}
+  svg.innerHTML=`${grid}<path d="${path(direct)} L${x(71)} ${y(0)} L${x(0)} ${y(0)} Z" fill="#8CCFE6" opacity=".45"/><path d="${path(total)}" fill="none" stroke="#087FA8" stroke-width="3"/>
+    <line x1="${x(24)}" y1="${top}" x2="${x(24)}" y2="${H-bottom}" stroke="#90AAB5" stroke-dasharray="4 4"/><line x1="${x(48)}" y1="${top}" x2="${x(48)}" y2="${H-bottom}" stroke="#90AAB5" stroke-dasharray="4 4"/>
+    ${[0,12,24,36,48,60,71].map(i=>`<text x="${x(i)}" y="${H-18}" text-anchor="middle" fill="#536B76" font-size="10">${i+1}</text>`).join('')}
+    <text x="${W/2}" y="${H-3}" text-anchor="middle" fill="#536B76" font-size="10">ชั่วโมงคาดการณ์</text><text x="14" y="${H/2}" transform="rotate(-90 14 ${H/2})" text-anchor="middle" fill="#536B76" font-size="10">ม³/วินาที</text>`;
+}
+
+function renderUhForecast(result,issuedDate){
+  const rows=result.daily.map(item=>({...item,date:forecastDate(issuedDate,item.horizon_day)}));
+  $('fcSummary').innerHTML=rows.map(item=>`<div class="forecastday"><b>${item.date.label}</b><span>ปริมาตรรวม <strong>${fmt(item.volume_mcm_day,3)}</strong> ล้าน ม³</span><span>น้ำท่าจากฝน ${fmt(item.direct_volume_mcm_day,3)} ล้าน ม³</span><span>Q เฉลี่ย ${fmt(item.mean_q_cms)} · สูงสุด ${fmt(item.peak_q_cms)} ม³/วินาที</span></div>`).join('');
+  $('fcTable').innerHTML=rows.map(item=>{const rainIndex=item.horizon_day+2;return `<tr><td>${item.date.label}</td><td>${fmt(result.basin_rain_mm[rainIndex],1)} มม.<small>ฝนส่วนเกิน ${fmt(result.effective_rain_mm[rainIndex],2)} มม.</small></td><td>${fmt(item.mean_q_cms)} / ${fmt(item.peak_q_cms)} ม³/วินาที</td><td>${fmt(item.volume_mcm_day,3)} ล้าน ม³<small>จากฝน ${fmt(item.direct_volume_mcm_day,3)} ล้าน ม³</small></td></tr>`;}).join('');
+  drawUhHydrograph(result.hourly);
+  const config=UNIT_HYDROGRAPH_CONFIG,cal=config.calibration;
+  $('fcModelNote').innerHTML=`พื้นที่รับน้ำ ${fmt(config.basin_area_km2,2)} ตร.กม. · C = ${fmt(result.runoff_coefficient,3)} · Q พื้นฐาน ${fmt(result.baseflow_cms)} ม³/วินาที<br>Unit Hydrograph มียอดที่ชั่วโมง ${config.unit_hydrograph.peak_hour} · สอบเทียบ ${cal.wet_season_event_count} เหตุการณ์ · R² ของรูปทรงรายวัน ${fmt(cal.fit_r_squared,3)}<br>ปริมาตรตอบสนองจากฝนทั้งหมด ${fmt(result.input_response_volume_mcm,3)} ล้าน ม³; ส่วนที่อยู่ในหน้าต่าง 72 ชั่วโมง ${fmt(result.forecast_window_direct_volume_mcm,3)} ล้าน ม³ ส่วนที่เหลือเป็นหาง Hydrograph หลังช่วงแสดงผล`;
+  $('fcResults').classList.add('on');$('fcCsv').disabled=false;$('fcMessage').className='forecastmsg';
+  $('fcMessage').textContent='จำลอง Hydrograph สำเร็จ · ปริมาตรรายวันคำนวณจากผลรวมรายชั่วโมง';
+  LAST_UH_FORECAST={...result,issuedDate,rows};
+}
+
+function runUhForecast(){
+  try{
+    if(!UNIT_HYDROGRAPH_CONFIG)throw new Error('ยังโหลด Unit Hydrograph ไม่สำเร็จ');
+    const coefficient=requiredForecastNumber('fcRunoffCoeff','สัมประสิทธิ์น้ำท่า');if(coefficient>1)throw new Error('สัมประสิทธิ์น้ำท่าต้องไม่เกิน 1');
+    const matrixByStation=readRainMatrix(false),rainByDay=UH_DAYS.map((_,dayIndex)=>matrixByStation.map(row=>row[dayIndex]));
+    const result=HatYaiForecastModel.unitHydrographForecast(UNIT_HYDROGRAPH_CONFIG,{
+      baseflowCms:requiredForecastNumber('fcBaseflow','Q พื้นฐาน'),runoffCoefficient:coefficient,rainByDay
+    });
+    renderUhForecast(result,$('fcDate').value);saveUhDraft();
+  }catch(error){$('fcMessage').className='forecastmsg bad';$('fcMessage').textContent=error.message||String(error);}
+}
+
+function clearUhForecast(){
+  $('fcDate').value=localISODate(new Date());$('fcBaseflow').value='0';
+  if(UNIT_HYDROGRAPH_CONFIG)$('fcRunoffCoeff').value=UNIT_HYDROGRAPH_CONFIG.runoff_coefficient.default;
+  document.querySelectorAll('#rainInputTable input').forEach(input=>input.value='0');
+  $('fcResults').classList.remove('on');$('fcCsv').disabled=true;$('fcMessage').className='forecastmsg';$('fcMessage').textContent='กรอกฝนของแต่ละสถานี แล้วกดจำลอง Hydrograph';
+  LAST_UH_FORECAST=null;try{localStorage.removeItem(FORECAST_DRAFT_KEY);}catch(_){}updateRainDayHeaders();updateBasinRainSummary();
+}
+
+function downloadUhCsv(){
+  if(!LAST_UH_FORECAST)return;
+  const start=new Date(`${LAST_UH_FORECAST.issuedDate}T00:00:00+07:00`);
+  const lines=['datetime,horizon_day,hour_in_day,q_direct_cms,q_total_cms,direct_volume_mcm_hour,total_volume_mcm_hour',...LAST_UH_FORECAST.hourly.map(row=>{
+    const date=new Date(start.getTime()+(24+row.hour_index)*3600000),stamp=`${localISODate(date)} ${String(date.getHours()).padStart(2,'0')}:00`;
+    return [stamp,row.horizon_day,row.hour_in_day,row.q_direct_cms,row.q_total_cms,row.direct_volume_mcm_hour,row.total_volume_mcm_hour].join(',');
+  })];
+  const url=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`x90_unit_hydrograph_${LAST_UH_FORECAST.issuedDate}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function convertRatingX90(){
+  try{const value=ratingValue('X.90','ratingH90');$('fcBaseflow').value=value.q;saveUhDraft();$('ratingOut').innerHTML=`X.90: ${fmt(value.h,3)} ม.รทก. → <b>${fmt(value.q,3)} ม³/วินาที</b><br><span style="color:#9A6010">Rating Table หมดช่วงใช้ 31 มี.ค. 2569 ปัจจุบันใช้เป็นข้อมูลอ้างอิง</span>`;}catch(error){$('ratingOut').textContent=error.message||String(error);}
+}
+
+function useTelemetryX90(){
+  const station=TELEMETRY.find(item=>item.station==='X.90');if(!station||station.level===null){$('ratingOut').textContent='ยังไม่มีระดับโทรมาตร X.90';return;}
+  $('ratingH90').value=station.level;const age=station.time?ageHours(station.time):Infinity;$('ratingOut').textContent=`ใส่ระดับ X.90 ${fmt(station.level)} ม.รทก. แล้ว · อายุข้อมูล ${fmt(age,1)} ชม. กรุณากด “แปลงระดับเป็น Q พื้นฐาน”`;
+}
+
+async function loadX90RatingConfig(){
+  try{const response=await fetch(RATING_CONFIG_URL,{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);RATING_CONFIG=await response.json();HatYaiForecastModel.validateRatingConfig(RATING_CONFIG);const station=RATING_CONFIG.stations['X.90'];$('ratingMeta').textContent=`ช่วงตาราง X.90 ${fmt(station.min_height_m_msl,2)}–${fmt(station.max_height_m_msl,2)} ม.รทก. · ช่วงใช้ 1 เม.ย. 2568–31 มี.ค. 2569`;}catch(error){$('ratingMeta').textContent='โหลด Rating Table ไม่สำเร็จ: '+error.message;}
+}
+
+async function loadUnitHydrographConfig(){
+  try{
+    const response=await fetch(UNIT_HYDROGRAPH_URL,{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);
+    UNIT_HYDROGRAPH_CONFIG=await response.json();HatYaiForecastModel.validateUnitHydrographConfig(UNIT_HYDROGRAPH_CONFIG);
+    const geo=await fetch(UNIT_HYDROGRAPH_CONFIG.thiessen_geojson,{cache:'no-store'});if(!geo.ok)throw new Error('Thiessen HTTP '+geo.status);UNIT_THIESSEN=await geo.json();
+    $('fcRunoffCoeff').value=UNIT_HYDROGRAPH_CONFIG.runoff_coefficient.default;
+    const c=UNIT_HYDROGRAPH_CONFIG.runoff_coefficient,cal=UNIT_HYDROGRAPH_CONFIG.calibration;
+    $('fcCoeffStatus').textContent=`ค่ากลาง ${fmt(c.default,3)} · ช่วงกึ่งกลาง ${fmt(c.q25,3)}–${fmt(c.q75,3)} จาก ${c.event_count} เหตุการณ์`;
+    $('basinMeta').innerHTML=`<b>ลุ่มน้ำสถานี X.90</b><br>พื้นที่รับน้ำอ้างอิง ${fmt(UNIT_HYDROGRAPH_CONFIG.basin_area_km2,2)} ตร.กม.<br>Thiessen 7 สถานี พื้นที่โพลิกอนรวม ${fmt(UNIT_HYDROGRAPH_CONFIG.rain_stations.reduce((s,x)=>s+x.polygon_area_km2,0),2)} ตร.กม.<br><br><b>รูปทรง Unit Hydrograph</b><br>ยอดตอบสนองประมาณชั่วโมง ${UNIT_HYDROGRAPH_CONFIG.unit_hydrograph.peak_hour}<br>สอบเทียบเหตุการณ์ฤดูฝน ${cal.wet_season_event_count} เหตุการณ์ ช่วง ${cal.period.start} ถึง ${cal.period.end}<br>R² ของรูปทรงรายวัน ${fmt(cal.fit_r_squared,3)}<br><br>ขอบเขตจาก ${UNIT_HYDROGRAPH_CONFIG.thiessen_source}`;
+    // Leaflet needs a visible container. The forecast tab creates the map lazily in showTab().
+    buildRainInputTable();
+    if($('tab-forecast').classList.contains('on'))setTimeout(ensureBasinMap,0);
+    $('forecastPill').title='Unit Hydrograph X.90 จากข้อมูลรายวันและขอบเขต Thiessen ที่แนบ';
+  }catch(error){$('basinMeta').textContent='โหลดข้อมูลลุ่มน้ำหรือ Unit Hydrograph ไม่สำเร็จ: '+error.message;$('fcMessage').className='forecastmsg bad';$('fcMessage').textContent=$('basinMeta').textContent;}
+}
+
+$('fcDate').value=localISODate(new Date());
+$('fcRun').addEventListener('click',runUhForecast);
+$('fcAutoRain').addEventListener('click',fillHistoricBasinRain);
+$('fcDry').addEventListener('click',zeroFutureRain);
+$('fcClear').addEventListener('click',clearUhForecast);
+$('fcCsv').addEventListener('click',downloadUhCsv);
+$('ratingConvert').addEventListener('click',convertRatingX90);
+$('ratingFromTelemetry').addEventListener('click',useTelemetryX90);
+FORECAST_INPUT_IDS.forEach(id=>$(id).addEventListener('input',()=>{if(id==='fcDate')updateRainDayHeaders();saveUhDraft();}));
+loadRainArchive();
+loadUnitHydrographConfig();
+loadX90RatingConfig();
 loadRelationshipReference();
 
 
@@ -2387,6 +2612,10 @@ function showTab(k) {
     if (youHalo) youHalo.bringToFront();
     if (youMarker) youMarker.bringToFront();
   }, 80);
+  if (k === 'forecast') setTimeout(() => {
+    ensureBasinMap();
+    if (BASIN_MAP) BASIN_MAP.invalidateSize();
+  }, 80);
 }
 document.querySelectorAll('nav.tabs button').forEach(b =>
   b.addEventListener('click', () => showTab(b.dataset.t)));
@@ -2584,8 +2813,8 @@ $('sources').innerHTML = `
   จะได้ระบุชื่อผลงาน ปี และผู้จัดทำให้ถูกต้อง</div>`;
 
 $('limits').innerHTML = `
-  <div class="warn"><b>ต้นแบบเพื่อการออกแบบ ไม่ใช่ระบบเตือนภัยจริง</b>
-  ยังไม่ผ่านการสอบทาน และยังไม่ต่อกับข้อมูลตรวจวัดเวลาจริง</div>
+  <div class="warn"><b>ขอบเขตการใช้งาน</b>
+  ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย และข้อมูลบางส่วนไม่ได้อัปเดตแบบเวลาจริง</div>
   <ul>
     <li><b>ข้อจำกัดใหญ่ที่สุด: มีข้อมูลรอยน้ำเพียงระดับเดียว</b> การปรับความลึกตามสัดส่วน
       ระหว่าง 7.20 ถึง 9.97 จึงยังไม่มีข้อมูลยืนยัน สมมติว่ารูปแบบการท่วมคงรูปเดิม

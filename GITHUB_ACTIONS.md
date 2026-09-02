@@ -18,12 +18,20 @@
 ## ไฟล์ที่ต้องอยู่ใน repository
 
 - `index.html`
+- `forecast-model.js`
 - `shelters.json`
 - `data/telemetry.json`
 - `data/forecast-rain-history.json` (ประวัติฝนสำหรับเติม API และฝนย้อนหลังอัตโนมัติ)
+- `data/rating-tables.json`
+- `data/x90-unit-hydrograph.json`
+- `data/x90-thiessen.geojson`
+- `data/rainfall-runoff-reference.json`
 - `ref/`
 - `publish_telemetry.py`
 - `.github/workflows/publish-telemetry.yml`
+
+ไฟล์ Unit Hydrograph และแผนที่ Thiessen เป็นไฟล์คงที่ หน้าเว็บคำนวณในเบราว์เซอร์
+จึงไม่ต้องเพิ่ม workflow ใหม่สำหรับส่วนคาดการณ์
 
 ## ตั้งค่าบน GitHub
 
