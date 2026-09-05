@@ -244,7 +244,28 @@
     const fractionSum = fractions.reduce((sum, value) => sum + finiteNonNegative(value, 'unit hydrograph fraction'), 0);
     if (Math.abs(weightSum - 1) > 0.001) throw new TypeError('rain station weights must sum to one');
     if (Math.abs(fractionSum - 1) > 0.000001) throw new TypeError('unit hydrograph fractions must sum to one');
+    const extreme = config.extreme_event_calibration;
+    if (extreme) {
+      const fast = extreme.fast_response && extreme.fast_response.hourly_volume_fraction;
+      if (!Array.isArray(fast) || fast.length !== fractions.length) {
+        throw new TypeError('extreme-event fast response is incomplete');
+      }
+      const fastSum = fast.reduce((sum, value) => sum + finiteNonNegative(value, 'fast-response fraction'), 0);
+      if (Math.abs(fastSum - 1) > 0.000001) throw new TypeError('fast-response fractions must sum to one');
+      const maximum = finiteNonNegative(extreme.coefficient && extreme.coefficient.maximum, 'maximum runoff coefficient');
+      if (maximum > 1) throw new TypeError('maximum runoff coefficient must not exceed one');
+    }
     return config;
+  }
+
+  function smoothStep01(value) {
+    const x = Math.max(0, Math.min(1, value));
+    return x * x * (3 - 2 * x);
+  }
+
+  function scaledSmoothStep(value, start, end) {
+    if (!(end > start)) return value >= end ? 1 : 0;
+    return smoothStep01((value - start) / (end - start));
   }
 
   function unitHydrographForecast(config, input) {
@@ -266,16 +287,45 @@
       return row.reduce((sum, value, stationIndex) =>
         sum + finiteNonNegative(value, `rainByDay ${dayIndex} station ${stationIndex}`) * weights[stationIndex], 0);
     });
-    const effectiveRain = basinRain.map(value => value * runoffCoefficient);
+    const extreme = input.autoExtremeCalibration === true ? config.extreme_event_calibration : null;
+    const slowFractions = config.unit_hydrograph.hourly_volume_fraction.map(Number);
+    let api = 0;
+    const apiByDay = basinRain.map((rain, dayIndex) => {
+      api = rain + (dayIndex ? Number(extreme && extreme.api_alpha || 0.88) * api : 0);
+      if (dayIndex === 2 && Number.isFinite(Number(input.apiOriginMm))) {
+        api = Math.max(api, finiteNonNegative(input.apiOriginMm, 'apiOriginMm'));
+      }
+      return api;
+    });
+    const coefficientByDay = basinRain.map((_, dayIndex) => {
+      if (!extreme) return runoffCoefficient;
+      const rule = extreme.coefficient;
+      const activation = scaledSmoothStep(
+        apiByDay[dayIndex], Number(rule.saturation_start_api_mm), Number(rule.saturation_full_api_mm)
+      );
+      return Number(rule.base) + (Number(rule.maximum) - Number(rule.base)) * activation;
+    });
+    const fastMixByDay = basinRain.map((_, dayIndex) => {
+      if (!extreme) return 0;
+      const rule = extreme.fast_response;
+      return Number(rule.maximum_fraction) * scaledSmoothStep(
+        apiByDay[dayIndex], Number(rule.activation_start_api_mm), Number(rule.activation_full_api_mm)
+      );
+    });
+    const effectiveRain = basinRain.map((value, index) => value * coefficientByDay[index]);
     const areaVolumePerMm = Number(config.basin_area_km2) * 1000;
-    const fractions = config.unit_hydrograph.hourly_volume_fraction.map(Number);
+    const fastFractions = extreme
+      ? extreme.fast_response.hourly_volume_fraction.map(Number)
+      : slowFractions;
     const hourly = Array.from({ length:72 }, (_, outputHour) => {
       const absoluteHour = 24 + outputHour;
       let directVolumeM3 = 0;
       dayOffsets.forEach((offset, dayIndex) => {
         const lag = absoluteHour - offset * 24;
-        if (lag >= 0 && lag < fractions.length) {
-          directVolumeM3 += effectiveRain[dayIndex] * areaVolumePerMm * fractions[lag];
+        if (lag >= 0 && lag < slowFractions.length) {
+          const fastMix = fastMixByDay[dayIndex];
+          const responseFraction = slowFractions[lag] * (1 - fastMix) + fastFractions[lag] * fastMix;
+          directVolumeM3 += effectiveRain[dayIndex] * areaVolumePerMm * responseFraction;
         }
       });
       const qDirect = directVolumeM3 / 3600;
@@ -305,6 +355,11 @@
       basin_area_km2: Number(config.basin_area_km2),
       baseflow_cms: baseflowCms,
       runoff_coefficient: runoffCoefficient,
+      calibration_mode: extreme ? 'auto_extreme_event' : 'manual_constant_coefficient',
+      runoff_coefficients_by_day: coefficientByDay.map(value => Number(value.toFixed(6))),
+      antecedent_precipitation_index_mm: apiByDay.map(value => Number(value.toFixed(3))),
+      fast_response_fraction_by_day: fastMixByDay.map(value => Number(value.toFixed(6))),
+      reference_event: extreme ? extreme.reference_event : null,
       basin_rain_mm: basinRain.map(value => Number(value.toFixed(3))),
       effective_rain_mm: effectiveRain.map(value => Number(value.toFixed(3))),
       input_response_volume_mcm: Number((effectiveRain.reduce((sum, value) => sum + value, 0) * areaVolumePerMm / 1e6).toFixed(6)),

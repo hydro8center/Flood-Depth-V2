@@ -92,4 +92,29 @@ assert.ok(uhRain.daily[0].volume_mcm_day > 0);
 assert.equal(Number(uhRain.hourly.reduce((sum,row)=>sum+row.total_volume_mcm_hour,0).toFixed(6)),
   Number(uhRain.daily.reduce((sum,row)=>sum+row.volume_mcm_day,0).toFixed(6)));
 
+const observedExtremeStationRain = [
+  [155, 46.8, 370.2, 139.6, 143.8, 262],
+  [74, 14, 173.6, 158, 262, 272],
+  [10, 7, 68, 45, 173, 156],
+  [11, 10, 61, 51, 236, 134],
+  [87.5, 58, 183, 79, 84, 210],
+  [140, 56, 352, 184, 139, 298],
+  [73, 26, 57, 159, 272, 309]
+];
+const extremeRainByDay = Array.from({length:6}, (_, day) =>
+  observedExtremeStationRain.map(station => station[day]));
+const uhExtreme = model.unitHydrographForecast(unitHydrograph, {
+  baseflowCms: 0,
+  runoffCoefficient: unitHydrograph.runoff_coefficient.default,
+  autoExtremeCalibration: true,
+  apiOriginMm: 0,
+  rainByDay: extremeRainByDay
+});
+assert.equal(uhExtreme.calibration_mode, 'auto_extreme_event');
+assert.ok(uhExtreme.runoff_coefficients_by_day.every(value => value >= 0 && value <= 1));
+assert.ok(uhExtreme.fast_response_fraction_by_day.every(value => value >= 0 && value <= 1));
+assert.ok(Math.abs(Math.max(...uhExtreme.hourly.map(row => row.q_total_cms)) - 4022) / 4022 < 0.001);
+assert.ok(uhExtreme.input_response_volume_mcm <=
+  uhExtreme.basin_rain_mm.reduce((sum, value) => sum + value, 0) * unitHydrograph.basin_area_km2 / 1000);
+
 console.log('forecast model and X.90 unit hydrograph tests: PASS');
