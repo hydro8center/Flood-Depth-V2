@@ -173,7 +173,9 @@
       throw new TypeError('rating table config is invalid');
     }
     for (const station of ['X.173A', 'X.90']) {
-      const item = config.stations[station];
+      if (!config.stations[station]) throw new TypeError(station + ' rating table is missing');
+    }
+    for (const [station, item] of Object.entries(config.stations)) {
       if (!item || !Array.isArray(item.values) || item.values.length < 2) {
         throw new TypeError(station + ' rating table is missing');
       }
@@ -231,14 +233,14 @@
   }
 
   function validateUnitHydrographConfig(config) {
-    if (!config || config.schema !== 1 || config.station !== 'X.90') {
-      throw new TypeError('X.90 unit hydrograph config is invalid');
+    if (!config || config.schema !== 1 || typeof config.station !== 'string' || !config.station.trim()) {
+      throw new TypeError('unit hydrograph config is invalid');
     }
     const area = finiteNonNegative(config.basin_area_km2, 'basin_area_km2');
     const stations = config.rain_stations;
     const fractions = config.unit_hydrograph && config.unit_hydrograph.hourly_volume_fraction;
     if (!area || !Array.isArray(stations) || stations.length < 2 || !Array.isArray(fractions) || !fractions.length) {
-      throw new TypeError('X.90 unit hydrograph config is incomplete');
+      throw new TypeError(config.station + ' unit hydrograph config is incomplete');
     }
     const weightSum = stations.reduce((sum, station) => sum + finiteNonNegative(station.weight, 'rain station weight'), 0);
     const fractionSum = fractions.reduce((sum, value) => sum + finiteNonNegative(value, 'unit hydrograph fraction'), 0);
@@ -351,7 +353,8 @@
     });
     return {
       schema: 1,
-      method: 'x90_unit_hydrograph_convolution',
+      station: config.station,
+      method: config.station.toLowerCase().replace(/[^a-z0-9]+/g, '') + '_unit_hydrograph_convolution',
       basin_area_km2: Number(config.basin_area_km2),
       baseflow_cms: baseflowCms,
       runoff_coefficient: runoffCoefficient,

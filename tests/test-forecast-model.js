@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const config = require('../data/forecast-model.json');
 const rating = require('../data/rating-tables.json');
 const unitHydrograph = require('../data/x90-unit-hydrograph.json');
+const unitHydrograph174 = require('../data/x174-unit-hydrograph.json');
 const model = require('../forecast-model.js');
 
 model.validateConfig(config);
@@ -117,4 +118,24 @@ assert.ok(Math.abs(Math.max(...uhExtreme.hourly.map(row => row.q_total_cms)) - 4
 assert.ok(uhExtreme.input_response_volume_mcm <=
   uhExtreme.basin_rain_mm.reduce((sum, value) => sum + value, 0) * unitHydrograph.basin_area_km2 / 1000);
 
-console.log('forecast model and X.90 unit hydrograph tests: PASS');
+model.validateUnitHydrographConfig(unitHydrograph174);
+assert.equal(unitHydrograph174.station, 'X.174');
+assert.equal(unitHydrograph174.rain_stations.length, 3);
+assert.ok(Math.abs(unitHydrograph174.rain_stations.reduce((sum,row)=>sum+row.weight,0)-1)<0.000001);
+assert.equal(unitHydrograph174.calibration.event_count, 90);
+assert.equal(unitHydrograph174.rating_curve.all.r2, 0.9831);
+const uh174 = model.unitHydrographForecast(unitHydrograph174, {
+  baseflowCms: 5,
+  runoffCoefficient: unitHydrograph174.runoff_coefficient.default,
+  rainByDay: [
+    [0,0,0], [0,0,0], [100,100,100], [0,0,0], [0,0,0], [0,0,0]
+  ]
+});
+assert.equal(uh174.station, 'X.174');
+assert.equal(uh174.method, 'x174_unit_hydrograph_convolution');
+assert.equal(uh174.basin_rain_mm[2], 100);
+assert.equal(uh174.hourly.length, 72);
+assert.ok(uh174.daily.some(row=>row.peak_q_cms>5));
+assert.ok(uh174.input_response_volume_mcm <= 100 * unitHydrograph174.basin_area_km2 / 1000);
+
+console.log('forecast model, X.90 and X.174 unit hydrograph tests: PASS');
