@@ -256,6 +256,13 @@
       if (Math.abs(fastSum - 1) > 0.000001) throw new TypeError('fast-response fractions must sum to one');
       const maximum = finiteNonNegative(extreme.coefficient && extreme.coefficient.maximum, 'maximum runoff coefficient');
       if (maximum > 1) throw new TypeError('maximum runoff coefficient must not exceed one');
+      if (extreme.volume_correction) {
+        const baseMultiplier = finiteNonNegative(extreme.volume_correction.base_multiplier, 'base volume multiplier');
+        const maximumMultiplier = finiteNonNegative(extreme.volume_correction.maximum_multiplier, 'maximum volume multiplier');
+        if (baseMultiplier < 1 || maximumMultiplier < baseMultiplier) {
+          throw new TypeError('event volume correction multipliers are invalid');
+        }
+      }
     }
     return config;
   }
@@ -314,6 +321,14 @@
         apiByDay[dayIndex], Number(rule.activation_start_api_mm), Number(rule.activation_full_api_mm)
       );
     });
+    const volumeCorrectionByDay = basinRain.map((_, dayIndex) => {
+      if (!extreme || !extreme.volume_correction) return 1;
+      const rule = extreme.volume_correction;
+      const activation = scaledSmoothStep(
+        apiByDay[dayIndex], Number(rule.activation_start_api_mm), Number(rule.activation_full_api_mm)
+      );
+      return Number(rule.base_multiplier) + (Number(rule.maximum_multiplier) - Number(rule.base_multiplier)) * activation;
+    });
     const effectiveRain = basinRain.map((value, index) => value * coefficientByDay[index]);
     const areaVolumePerMm = Number(config.basin_area_km2) * 1000;
     const fastFractions = extreme
@@ -327,7 +342,7 @@
         if (lag >= 0 && lag < slowFractions.length) {
           const fastMix = fastMixByDay[dayIndex];
           const responseFraction = slowFractions[lag] * (1 - fastMix) + fastFractions[lag] * fastMix;
-          directVolumeM3 += effectiveRain[dayIndex] * areaVolumePerMm * responseFraction;
+          directVolumeM3 += effectiveRain[dayIndex] * areaVolumePerMm * volumeCorrectionByDay[dayIndex] * responseFraction;
         }
       });
       const qDirect = directVolumeM3 / 3600;
@@ -362,10 +377,13 @@
       runoff_coefficients_by_day: coefficientByDay.map(value => Number(value.toFixed(6))),
       antecedent_precipitation_index_mm: apiByDay.map(value => Number(value.toFixed(3))),
       fast_response_fraction_by_day: fastMixByDay.map(value => Number(value.toFixed(6))),
+      volume_correction_factors_by_day: volumeCorrectionByDay.map(value => Number(value.toFixed(6))),
       reference_event: extreme ? extreme.reference_event : null,
       basin_rain_mm: basinRain.map(value => Number(value.toFixed(3))),
       effective_rain_mm: effectiveRain.map(value => Number(value.toFixed(3))),
       input_response_volume_mcm: Number((effectiveRain.reduce((sum, value) => sum + value, 0) * areaVolumePerMm / 1e6).toFixed(6)),
+      corrected_input_response_volume_mcm: Number((effectiveRain.reduce((sum, value, index) =>
+        sum + value * volumeCorrectionByDay[index], 0) * areaVolumePerMm / 1e6).toFixed(6)),
       forecast_window_direct_volume_mcm: Number(hourly.reduce((sum, row) => sum + row.direct_volume_mcm_hour, 0).toFixed(6)),
       hourly,
       daily

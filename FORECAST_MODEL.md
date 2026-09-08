@@ -1,8 +1,20 @@
-# แบบจำลอง Unit Hydrograph ลุ่มน้ำสถานี X.90
+# แบบจำลอง Unit Hydrograph ลุ่มน้ำสถานี X.90 และ X.174
 
 เอกสารวิธีวิจัยฉบับเต็มพร้อมสมการ สถิติสรุป ผลทดสอบ และข้อจำกัดอยู่ที่
-`ref/flooddepth-forecast-methodology-v1.0.pdf` และฉบับแก้ไขได้ที่
-`ref/flooddepth-forecast-methodology-v1.0.docx`
+`ref/flooddepth-forecast-methodology-v1.1.pdf` และฉบับแก้ไขได้ที่
+`ref/flooddepth-forecast-methodology-v1.1.docx`
+
+## การปรับเทียบ X.174 กับเหตุการณ์ 19–30 พฤศจิกายน 2568
+
+- ใช้พื้นที่รับน้ำ 106.1931 ตร.กม. และน้ำหนัก Thiessen 580471 = 0.080464,
+  580411 = 0.218715 และ 580232 = 0.700821 ตามการจับคู่ที่ผู้ใช้ยืนยัน
+- เป้าหมายจากกราฟเหตุการณ์คือยอด 581.20 ลบ.ม./วินาที เวลา 08:00 น. วันที่ 25 พ.ย. 2568
+  และปริมาตรรวม 190.70 ล้าน ลบ.ม.
+- ผลจำลองย้อนเหตุการณ์ได้ยอด 580.20 ลบ.ม./วินาที (คลาด −0.17%) และปริมาตร
+  190.70 ล้าน ลบ.ม.; NSE รายวัน 0.822 และ RMSE 65.06 ลบ.ม./วินาที
+- ช่วงเหตุการณ์ไม่มีข้อมูล 580232 จึงใช้ 580411 เป็นตัวแทนเฉพาะการ replay และใช้ตัวคูณ
+  แก้ปริมาตรสูงสุด 1.446767 ซึ่งไม่ใช่สัมประสิทธิ์น้ำท่าทางกายภาพ
+- ผลนี้เป็นการสอบเทียบเหตุการณ์เดียว ต้อง validation กับเหตุการณ์ใหญ่อิสระก่อนใช้งานเตือนภัย
 
 หน้าคาดการณ์รับฝนรายวันจากสถานี 7 จุดในลุ่ม X.90 ถ่วงน้ำหนักด้วยพื้นที่ Thiessen
 แล้วแปลงฝนส่วนเกินเป็น Hydrograph รายชั่วโมง ก่อนรวมปริมาตรเป็นรายวัน
@@ -85,9 +97,11 @@ Thiessen แบบจำลองเดิมจึงมีแนวโน้�
 2. `forecast-model.js`
 3. `data/x90-unit-hydrograph.json`
 4. `data/x90-thiessen.geojson`
-5. `data/rating-tables.json`
-6. `data/forecast-rain-history.json`
-7. `data/rainfall-runoff-reference.json`
+5. `data/x174-unit-hydrograph.json`
+6. `data/x174-thiessen.geojson`
+7. `data/rating-tables.json`
+8. `data/forecast-rain-history.json`
+9. `data/rainfall-runoff-reference.json`
 
 ไม่ต้องเพิ่ม workflow สำหรับการคำนวณ Unit Hydrograph เพราะทำในเบราว์เซอร์
 

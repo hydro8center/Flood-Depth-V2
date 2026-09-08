@@ -137,5 +137,23 @@ assert.equal(uh174.basin_rain_mm[2], 100);
 assert.equal(uh174.hourly.length, 72);
 assert.ok(uh174.daily.some(row=>row.peak_q_cms>5));
 assert.ok(uh174.input_response_volume_mcm <= 100 * unitHydrograph174.basin_area_km2 / 1000);
+const reference174 = unitHydrograph174.extreme_event_calibration.reference_event;
+const referenceStationRain174 = unitHydrograph174.rain_stations.map(station =>
+  reference174.station_rain_mm[station.code]);
+const referenceRain174 = Array.from({length:6}, (_, day) =>
+  referenceStationRain174.map(station => station[day]));
+const replay174 = model.unitHydrographForecast(unitHydrograph174, {
+  baseflowCms: 3.2,
+  runoffCoefficient: unitHydrograph174.runoff_coefficient.default,
+  autoExtremeCalibration: true,
+  rainByDay: referenceRain174
+});
+const replayPeak174 = Math.max(...replay174.hourly.map(row => row.q_total_cms));
+assert.equal(replay174.calibration_mode, 'auto_extreme_event');
+assert.ok(Math.abs(replayPeak174 - reference174.observed_peak_cms) / reference174.observed_peak_cms < 0.02);
+assert.ok(replay174.volume_correction_factors_by_day.every(value => value >= 1));
+assert.ok(replay174.runoff_coefficients_by_day.every(value => value <= 1));
+assert.equal(reference174.modeled_volume_mcm, 190.7);
+assert.ok(Math.abs(reference174.modeled_peak_cms - reference174.observed_peak_cms) / reference174.observed_peak_cms < 0.002);
 
 console.log('forecast model, X.90 and X.174 unit hydrograph tests: PASS');
