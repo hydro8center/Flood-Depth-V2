@@ -2,14 +2,14 @@
 
 อัปโหลดไฟล์และโฟลเดอร์ทั้งหมดในชุดนี้ไปที่รากของ repository โดยให้ `index.html` อยู่ระดับบนสุดเหมือนเดิม
 
-ไฟล์ใหม่หรือไฟล์ที่ต้องแทนของเดิมในรุ่น 0.3.1:
+ไฟล์ใหม่หรือไฟล์ที่ต้องแทนของเดิมในรุ่น 0.3.2:
 
 - `index.html`
 - `forecast-model.js`
 - `data/x174-unit-hydrograph.json`
 - `data/x174-thiessen.geojson`
-- `ref/flooddepth-forecast-methodology-v1.1.docx`
-- `ref/flooddepth-forecast-methodology-v1.1.pdf`
+- `ref/flooddepth-forecast-methodology-v1.2.docx`
+- `ref/flooddepth-forecast-methodology-v1.2.pdf`
 - `ref/X174_ANALYSIS_REPORT.md`
 - `tests/test-forecast-model.js`
 - `.gitignore`

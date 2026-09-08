@@ -1,8 +1,8 @@
 # แบบจำลอง Unit Hydrograph ลุ่มน้ำสถานี X.90 และ X.174
 
 เอกสารวิธีวิจัยฉบับเต็มพร้อมสมการ สถิติสรุป ผลทดสอบ และข้อจำกัดอยู่ที่
-`ref/flooddepth-forecast-methodology-v1.1.pdf` และฉบับแก้ไขได้ที่
-`ref/flooddepth-forecast-methodology-v1.1.docx`
+`ref/flooddepth-forecast-methodology-v1.2.pdf` และฉบับแก้ไขได้ที่
+`ref/flooddepth-forecast-methodology-v1.2.docx`
 
 ## การปรับเทียบ X.174 กับเหตุการณ์ 19–30 พฤศจิกายน 2568
 
