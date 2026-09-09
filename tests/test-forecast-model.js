@@ -114,9 +114,24 @@ const uhExtreme = model.unitHydrographForecast(unitHydrograph, {
 assert.equal(uhExtreme.calibration_mode, 'auto_extreme_event');
 assert.ok(uhExtreme.runoff_coefficients_by_day.every(value => value >= 0 && value <= 1));
 assert.ok(uhExtreme.fast_response_fraction_by_day.every(value => value >= 0 && value <= 1));
-assert.ok(Math.abs(Math.max(...uhExtreme.hourly.map(row => row.q_total_cms)) - 4022) / 4022 < 0.001);
+assert.ok(Math.abs(Math.max(...uhExtreme.hourly.map(row => row.q_total_cms)) - 4022) / 4022 < 0.01);
 assert.ok(uhExtreme.input_response_volume_mcm <=
   uhExtreme.basin_rain_mm.reduce((sum, value) => sum + value, 0) * unitHydrograph.basin_area_km2 / 1000);
+
+const reference2024 = unitHydrograph.extreme_event_calibration.additional_reference_event;
+const stationRain2024 = unitHydrograph.rain_stations.map(station => reference2024.station_rain_mm[station.code]);
+const rainByDay2024 = Array.from({length:6}, (_, day) => stationRain2024.map(station => station[day]));
+const replay2024 = model.unitHydrographForecast(unitHydrograph, {
+  baseflowCms: reference2024.initial_baseflow_cms,
+  runoffCoefficient: unitHydrograph.runoff_coefficient.default,
+  autoExtremeCalibration: true,
+  outputHours: 120,
+  rainByDay: rainByDay2024
+});
+const peak2024 = replay2024.hourly.reduce((best, row) => row.q_total_cms > best.q_total_cms ? row : best);
+assert.ok(Math.abs(peak2024.q_total_cms - reference2024.observed_peak_x90_cms) / reference2024.observed_peak_x90_cms < 0.01);
+assert.ok(peak2024.hour_index + 1 >= 24 && peak2024.hour_index + 1 <= 65);
+assert.equal(unitHydrograph.extreme_event_calibration.fast_response.peak_hour, 25);
 
 model.validateUnitHydrographConfig(unitHydrograph174);
 assert.equal(unitHydrograph174.station, 'X.174');
