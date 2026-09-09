@@ -334,7 +334,11 @@
     const fastFractions = extreme
       ? extreme.fast_response.hourly_volume_fraction.map(Number)
       : slowFractions;
-    const hourly = Array.from({ length:72 }, (_, outputHour) => {
+    const requestedOutputHours = input.outputHours === undefined ? 72 : Number(input.outputHours);
+    if (!Number.isInteger(requestedOutputHours) || requestedOutputHours < 72 || requestedOutputHours > 240) {
+      throw new TypeError('outputHours must be an integer from 72 to 240');
+    }
+    const hourly = Array.from({ length:requestedOutputHours }, (_, outputHour) => {
       const absoluteHour = 24 + outputHour;
       let directVolumeM3 = 0;
       dayOffsets.forEach((offset, dayIndex) => {
@@ -356,7 +360,7 @@
         total_volume_mcm_hour: Number(((baseflowCms * 3600 + directVolumeM3) / 1e6).toFixed(9))
       };
     });
-    const daily = [1, 2, 3].map(day => {
+    const daily = Array.from({ length:Math.ceil(requestedOutputHours / 24) }, (_, index) => index + 1).map(day => {
       const rows = hourly.filter(row => row.horizon_day === day);
       return {
         horizon_day: day,
@@ -384,6 +388,7 @@
       input_response_volume_mcm: Number((effectiveRain.reduce((sum, value) => sum + value, 0) * areaVolumePerMm / 1e6).toFixed(6)),
       corrected_input_response_volume_mcm: Number((effectiveRain.reduce((sum, value, index) =>
         sum + value * volumeCorrectionByDay[index], 0) * areaVolumePerMm / 1e6).toFixed(6)),
+      output_hours: requestedOutputHours,
       forecast_window_direct_volume_mcm: Number(hourly.reduce((sum, row) => sum + row.direct_volume_mcm_hour, 0).toFixed(6)),
       hourly,
       daily

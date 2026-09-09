@@ -156,4 +156,34 @@ assert.ok(replay174.runoff_coefficients_by_day.every(value => value <= 1));
 assert.equal(reference174.modeled_volume_mcm, 190.7);
 assert.ok(Math.abs(reference174.modeled_peak_cms - reference174.observed_peak_cms) / reference174.observed_peak_cms < 0.002);
 
+// Operational check: a dry antecedent period followed by heavy forecast rain
+// must produce a visible X.174 response and retain the delayed runoff beyond day 3.
+const futureHeavy174 = model.unitHydrographForecast(unitHydrograph174, {
+  baseflowCms: 0,
+  runoffCoefficient: unitHydrograph174.runoff_coefficient.default,
+  autoExtremeCalibration: true,
+  outputHours: 120,
+  rainByDay: [0, 0, 0, 100, 130, 160].map(value => Array(3).fill(value))
+});
+const futureHeavyPeak174 = futureHeavy174.hourly.reduce((best, row) =>
+  !best || row.q_total_cms > best.q_total_cms ? row : best, null);
+assert.equal(futureHeavy174.hourly.length, 120);
+assert.equal(futureHeavy174.daily.length, 5);
+assert.ok(futureHeavy174.daily[1].peak_q_cms > 100);
+assert.ok(futureHeavyPeak174.q_total_cms > 250);
+assert.ok(futureHeavyPeak174.hour_index >= 72, 'combined three-day storm should peak after the old 72-hour display window');
+assert.ok(futureHeavy174.forecast_window_direct_volume_mcm > 0.85 * futureHeavy174.corrected_input_response_volume_mcm);
+
+const singlePulse174 = model.unitHydrographForecast(unitHydrograph174, {
+  baseflowCms: 0,
+  runoffCoefficient: unitHydrograph174.runoff_coefficient.default,
+  autoExtremeCalibration: true,
+  outputHours: 120,
+  rainByDay: [0, 0, 0, 130, 0, 0].map(value => Array(3).fill(value))
+});
+const singlePulsePeak174 = singlePulse174.hourly.reduce((best, row) =>
+  !best || row.q_total_cms > best.q_total_cms ? row : best, null);
+assert.ok(singlePulsePeak174.hour_index >= 24 && singlePulsePeak174.hour_index <= 36,
+  `X.174 heavy-rain peak lag was ${singlePulsePeak174.hour_index} hours`);
+
 console.log('forecast model, X.90 and X.174 unit hydrograph tests: PASS');
