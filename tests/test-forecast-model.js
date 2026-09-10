@@ -6,6 +6,8 @@ const rating = require('../data/rating-tables.json');
 const unitHydrograph = require('../data/x90-unit-hydrograph.json');
 const unitHydrograph174 = require('../data/x174-unit-hydrograph.json');
 const model = require('../forecast-model.js');
+const HydrographAnalog = require('../hydrograph-analog.js');
+const analogConfig = require('../data/historical-hydrograph-analogs.json');
 
 model.validateConfig(config);
 assert.equal(config.schema, 2);
@@ -201,4 +203,29 @@ const singlePulsePeak174 = singlePulse174.hourly.reduce((best, row) =>
 assert.ok(singlePulsePeak174.hour_index >= 24 && singlePulsePeak174.hour_index <= 36,
   `X.174 heavy-rain peak lag was ${singlePulsePeak174.hour_index} hours`);
 
-console.log('forecast model, X.90 and X.174 unit hydrograph tests: PASS');
+const x90Year2568 = analogConfig.stations['X.90'].templates.find(row => row.year_be === 2568);
+const x90Curve2568 = HydrographAnalog.expandAnchors(x90Year2568.anchors);
+const x90Observed = x90Curve2568.slice(0, 60).map(row => ({hour: row.hour, level: 0.15 + 1.08 * row.level}));
+const x90Analog = HydrographAnalog.analyze(analogConfig.stations['X.90'], x90Observed);
+assert.equal(x90Analog.best.year_be, 2568);
+assert.equal(x90Analog.best.peak_hour, 82);
+assert.ok(x90Analog.best.similarity > 99);
+
+const x174Year2567 = analogConfig.stations['X.174'].templates.find(row => row.year_be === 2567);
+const x174Curve2567 = HydrographAnalog.expandAnchors(x174Year2567.anchors);
+const x174Analog = HydrographAnalog.analyze(analogConfig.stations['X.174'], x174Curve2567.slice(0, 38));
+assert.equal(x174Analog.best.year_be, 2567);
+assert.equal(x174Analog.best.peak_hour, 47);
+
+const parsedAnalog = HydrographAnalog.parseObservations('8.10\n8.15\n8.18');
+assert.deepEqual(parsedAnalog.map(row => row.hour), [1,2,3]);
+assert.equal(HydrographAnalog.assessEvent(analogConfig.stations['X.90'], parsedAnalog).is_event, false);
+assert.equal(HydrographAnalog.assessEvent(analogConfig.stations['X.90'], [
+  {hour:1,level:8.60},{hour:2,level:8.82},{hour:3,level:9.05}
+]).is_event, true);
+assert.equal(HydrographAnalog.interpolateRating([[1,0],[2,10]],1.5),5);
+assert.equal(HydrographAnalog.hourlyFromTelemetry([
+  {t:'2026-01-01T00:10:00+07:00',v:1},{t:'2026-01-01T00:50:00+07:00',v:2},{t:'2026-01-01T01:05:00+07:00',v:3}
+]).length,2);
+
+console.log('forecast model, unit hydrograph and historical analog tests: PASS');
