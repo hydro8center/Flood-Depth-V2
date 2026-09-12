@@ -1030,7 +1030,7 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.4.4 · ปรับถ้อยคำพื้นที่รับผลกระทบอย่างเป็นทางการ</span>
+    <span class="ver">Version 0.4.6 · ความลึกเพิ่มแบบค่อยเป็นค่อยไปหลัง X.44 ถึง 8.30 ม.</span>
     <div style="margin-top:13px">
       ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย — โปรดตรวจสอบกับประกาศทางการ<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
@@ -1060,7 +1060,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="flood-fill.js?v=0.4.4"></script>
+<script src="flood-fill.js?v=0.4.6"></script>
 <script src="forecast-model.js?v=0.4.0"></script>
 <script src="hydrograph-analog.js?v=0.4.0"></script>
 <script src="hydrograph-analog-ui.js?v=0.4.0"></script>
@@ -1079,6 +1079,7 @@ const RESID_PNG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAigAAAJiCAAAAADIp
 const EQ_A = 0.0097, EQ_B = 7.2383;
 const CITY_Q_CAPACITY = 1680, R1_Q_CAPACITY = 1200, X44_Q_CAPACITY = 480;
 const RIGHT_BANK_BREACH_H = 8.30, MCM_DAY_PER_CMS = 0.0864;
+const DEPTH_RAMP_GAMMA = 0.65, CITY_Q_REFERENCE = 4022;
 let H0 = 7.20;                 // ระดับที่น้ำเริ่มล้นคลองอู่ตะเภา — ต่ำกว่านี้ไม่ท่วม
 let HREF = MODEL.href;         // 9.97 ม.รทก. 25 พ.ย. 68 (SWOC)
 const BANK = MODEL.bank;
@@ -1225,7 +1226,7 @@ function flowGateAt(lat, lon, h = H, q = TOTAL_Q) {
   if (!Number.isFinite(bankA) || !Number.isFinite(bankB)) return { allowed:false, region:'unrouted', label:'นอกช่วงแนวตลิ่งที่ตรวจสอบ', threshold:'ข้อมูลทางเชื่อมจากคลองเพิ่มเติม' };
   // บริเวณทางแยก/บรรจบ เส้นสองฝั่งอาจไขว้ลำดับกัน จึงเรียงตะวันตก–ตะวันออกทุกแถว
   const west = Math.min(bankA, bankB), east = Math.max(bankA, bankB);
-  if (lon < west) return { allowed:q >= CITY_Q_CAPACITY, region:'yellow', label:'พื้นที่ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา', threshold:`Q รวม ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที` };
+  if (lon < west) return { allowed:q >= CITY_Q_CAPACITY || h >= RIGHT_BANK_BREACH_H, region:'yellow', label:'พื้นที่ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา', threshold:`Q รวม ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที หรือ X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
   if (lon > east) return { allowed:h >= RIGHT_BANK_BREACH_H, region:'green', label:'พื้นที่ชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่', threshold:`X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
   return { allowed:true, region:'channel', label:'แนวคลอง/ระหว่างตลิ่ง' };
 }
@@ -1239,7 +1240,20 @@ async function loadRiverGeometry() {
   return data;
 }
 
-const factor = h => Math.max(0, (h - H0) / (HREF - H0));
+const clamp01 = value => Math.max(0, Math.min(1, value));
+/* แยกเกณฑ์ “เริ่มได้รับผลกระทบ” ออกจากขนาดความลึก:
+   ที่ X.44 = 8.30 ม. ความลึกเริ่มใกล้ศูนย์ แล้วค่อยเพิ่มจนเท่ารอยน้ำอ้างอิงที่ HREF
+   พื้นที่ริม ร.1/ฝั่งซ้ายยังตอบสนองจาก Q รวมได้ก่อน โดยอ้างอิงยอดเหตุการณ์ 4,022 ม³/วินาที */
+const stageDepthFactor = h => Math.pow(clamp01((h - RIGHT_BANK_BREACH_H) / (HREF - RIGHT_BANK_BREACH_H)), DEPTH_RAMP_GAMMA);
+const flowDepthFactor = q => Math.pow(clamp01((q - CITY_Q_CAPACITY) / (CITY_Q_REFERENCE - CITY_Q_CAPACITY)), DEPTH_RAMP_GAMMA);
+function depthFactorForGate(gate, h = H, q = TOTAL_Q) {
+  if (!gate || !gate.allowed) return 0;
+  const stageFactor = stageDepthFactor(h);
+  return gate.region === 'yellow' || gate.region === 'channel'
+    ? Math.max(stageFactor, flowDepthFactor(q)) : stageFactor;
+}
+const stageAtDepthFactor = f => RIGHT_BANK_BREACH_H
+  + Math.pow(clamp01(f), 1 / DEPTH_RAMP_GAMMA) * (HREF - RIGHT_BANK_BREACH_H);
 
 function solve(lat, lon, h) {
   const t = dRefAt(lat, lon);
@@ -1249,11 +1263,12 @@ function solve(lat, lon, h) {
   let gate = flowGateAt(lat, lon, h, TOTAL_Q);
   const connected = floodConnectedAt(lat, lon, h, TOTAL_Q);
   if (gate.allowed && connected === false) gate = { allowed:false, region:'isolated', label:'แอ่งต่ำที่ไม่เชื่อมกับแนวคลอง', threshold:'เส้นทางน้ำต่อเนื่องตาม DEM' };
-  const depth = gate.allowed ? t.dRef * factor(h) : 0;
-  const sd = (dn <= 500 ? 0.49 : dn <= 1000 ? 0.52 : 0.60) * Math.max(0.35, factor(h));
+  const depthFactor = depthFactorForGate(gate, h, TOTAL_Q);
+  const depth = t.dRef * depthFactor;
+  const sd = (dn <= 500 ? 0.49 : dn <= 1000 ? 0.52 : 0.60) * Math.max(0.20, depthFactor);
   const tier = dn <= 500 ? ['สูง', 'var(--dry)'] : dn <= 1000 ? ['ปานกลาง', 'var(--warm)'] : ['ต่ำ', 'var(--z2)'];
-  const t10 = t.dRef > 0.02 ? H0 + 1.0 * (HREF - H0) / t.dRef : 1e9;
-  const onset = t.dRef > 0.02 ? H0 + 0.05 * (HREF - H0) / t.dRef : 1e9;
+  const t10 = t.dRef > 1.0 ? stageAtDepthFactor(1.0 / t.dRef) : 1e9;
+  const onset = t.dRef > 0.05 ? stageAtDepthFactor(0.05 / t.dRef) : 1e9;
   return { ok: true, depth, z: t.z, dRef: t.dRef, wse: t.z + depth, dn, sd, tier, t10, onset, zone: zoneOf(t10), gate };
 }
 
@@ -1428,7 +1443,7 @@ function floodConnectedAt(lat, lon, h = H, q = TOTAL_Q) {
 }
 
 function renderFlood() {
-  const f = factor(H), RGB = CLS.map(c => hex(c.c));
+  const RGB = CLS.map(c => hex(c.c));
   const { c, g, w, h } = makeCanvas(), size = w * h;
   const im = g.createImageData(w, h), o = im.data;
   const candidate = new Uint8Array(size), depths = new Float32Array(size), hatched = new Uint8Array(size);
@@ -1449,8 +1464,9 @@ function renderFlood() {
       const rX = Math.min(DM.rw - 1, Math.round(fullX / DM.rf));
       const z = Z[fullIndex] / DM.zScale;
       const dRef = Math.max(0, planeAt(mx(lon), yy) + residIdx(rY * DM.rw + rX) - z);
-      const dep = dRef * f;
-      if (dep <= 0.05 || !flowGateAt(lat, lon, H, TOTAL_Q).allowed) continue;
+      const gate = flowGateAt(lat, lon, H, TOTAL_Q);
+      const dep = dRef * depthFactorForGate(gate, H, TOTAL_Q);
+      if (dep <= 0.05) continue;
       candidate[index] = 1; depths[index] = dep; potentialCells++;
     }
   }
@@ -1479,7 +1495,7 @@ function renderZone() {
   zoneLayer.setUrl(eachCell((o, k, c) => {
     if (c.dn > 2000) return hatch(o, k, c.x, c.y);
     if (c.dRef <= 0.05) { o[k + 3] = 0; return; }
-    const zi = zoneOf(H0 + (HREF - H0) / c.dRef);
+    const zi = zoneOf(c.dRef > 1.0 ? stageAtDepthFactor(1.0 / c.dRef) : 1e9);
     o[k] = RGB[zi][0]; o[k + 1] = RGB[zi][1]; o[k + 2] = RGB[zi][2]; o[k + 3] = 205;
   }));
 }
@@ -1498,10 +1514,10 @@ function renderTerrain() {
 
 function paintMarks() {
   markLayer.clearLayers();
-  const f = factor(H);
   for (const p of P) {
     const t = dRefAt(p.lat, p.lon);
-    const dep = t ? t.dRef * f : null;
+    const gate = flowGateAt(p.lat, p.lon, H, TOTAL_Q);
+    const dep = t ? t.dRef * depthFactorForGate(gate, H, TOTAL_Q) : null;
     const c = dep === null ? { c: '#98AAB4' } : classOf(dep);
     const popup = `<b>${p.name}</b><br>รอยน้ำท่วมสำรวจ ${fmt(p.d)} ม.`
       + (p.z !== null ? `<br>ระดับพื้นดิน ${fmt(p.z)} ม.รทก.` : '')
@@ -1518,7 +1534,7 @@ function paintCommunities() {
   comLayer.clearLayers();
   for (const c of COMS) {
     const popup = `<b>${c[2]}</b> · ${c[3]}<br>${ZONES[comZone(c)].t}<br>`
-      + `ลึก 0.5 ม. เมื่อ X.44 ถึง <b>${fmt(H0 + 0.5 * (HREF - H0) / c[5])}</b><br>`
+      + `ลึก 0.5 ม. เมื่อ X.44 ถึง <b>${fmt(stageAtDepthFactor(0.5 / c[5]))}</b><br>`
       + `ลึก 1.0 ม. เมื่อ X.44 ถึง <b>${fmt(trigOf(c[5]))}</b><br>`
       + `ความลึกที่ระดับสถิติ ${fmt(c[5])} ม. · จุดสำรวจ ${c[4]} จุด`;
     addTapTarget([c[0], c[1]], popup, comLayer);
@@ -1609,7 +1625,7 @@ $('gpsbtn').addEventListener('click', () => {
    เพื่อให้ยังถูกต้องแม้ผู้ใช้เปลี่ยนระดับเริ่มล้นหรือระดับอ้างอิง */
 const AREA_F = DM.areaCurve.map(r => [(r[0] - 7.20) / (9.97 - 7.20), r[1]]);
 function areaAt(h) {
-  const f = factor(h), c = AREA_F;
+  const f = stageDepthFactor(h), c = AREA_F;
   if (f <= c[0][0]) return 0;
   for (let i = 1; i < c.length; i++)
     if (f <= c[i][0]) return c[i - 1][1] + (c[i][1] - c[i - 1][1]) * (f - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
@@ -1707,11 +1723,15 @@ function syncFields(src) {
   if (src !== 'cityQSlider') el('cityQSlider').value = Math.max(0, Math.min(4000, Math.round(TOTAL_Q / 10) * 10));
   if (src !== 'cityQ' && document.activeElement !== el('cityQ')) el('cityQ').value = Math.round(TOTAL_Q);
   el('cityQNum').textContent = fmt(TOTAL_Q, 0);
-  const leftOpen = TOTAL_Q >= CITY_Q_CAPACITY, rightOpen = H >= RIGHT_BANK_BREACH_H;
+  const rightOpen = H >= RIGHT_BANK_BREACH_H;
+  const leftOpen = TOTAL_Q >= CITY_Q_CAPACITY || rightOpen;
   el('flowGateNote').innerHTML = `<span class="${leftOpen?'gateon':'gateoff'}">ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้าย ${leftOpen?'เริ่มได้รับผลกระทบ':'ยังไม่ถึงเกณฑ์'}</span> · `
     + `<span class="${rightOpen?'gateon':'gateoff'}">ชุมชนฝั่งขวาและเขตเศรษฐกิจหาดใหญ่ ${rightOpen?'เริ่มได้รับผลกระทบ':'ยังไม่ถึงระดับ 8.30 ม.'}</span><br><small>${TOTAL_Q_SOURCE}</small>`;
+  const levelVolume = Math.max(0, volOf(H));
+  const levelEquivalentQ = levelVolume / MCM_DAY_PER_CMS;
   el('homeFlowNote').innerHTML = `Q รวมก่อนเข้าเมืองประมาณ <b>${fmt(TOTAL_Q,0)} ม³/วินาที</b> · `
-    + `คลอง ร.1 รับได้ ${R1_Q_CAPACITY.toLocaleString('th-TH')} + ทาง X.44 ${X44_Q_CAPACITY.toLocaleString('th-TH')} = ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที`;
+    + `คลอง ร.1 รับได้ ${R1_Q_CAPACITY.toLocaleString('th-TH')} + ทาง X.44 ${X44_Q_CAPACITY.toLocaleString('th-TH')} = ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที`
+    + `<br><small>ระดับ X.44 ${fmt(H,2)} ม.รทก. ตามสมการ H = 0.0097V + 7.2383 เทียบเท่า V ${fmt(levelVolume,3)} ล้าน ลบ.ม./วัน หรือ Q เฉลี่ย ${fmt(levelEquivalentQ,0)} ม³/วินาที</small>`;
 }
 
 function setTotalQ(q, src, sourceLabel) {
@@ -1800,7 +1820,7 @@ function setLegend() {
 }
 
 /* ---------- ตารางโซนและรายชื่อชุมชน ---------- */
-const trigOf = dRef => dRef > 0.02 ? H0 + 1.0 * (HREF - H0) / dRef : 1e9;
+const trigOf = dRef => dRef > 1.0 ? stageAtDepthFactor(1.0 / dRef) : 1e9;
 const comZone = c => zoneOf(trigOf(c[5]));
 function zoneAreas() {
   const a = [0, 0, 0, 0, 0, 0];
@@ -1844,7 +1864,7 @@ function buildComList(q) {
     `<div class="comrow" data-i="${COMS.indexOf(c)}">
        <span class="swatch" style="background:${ZONES[comZone(c)].c}"></span>
        <span class="nm">${c[2]} <span class="mu">${c[3]}</span></span>
-       <b>${fmt(trigOf(c[5]))}</b></div>`).join('')
+       <b>${trigOf(c[5]) < 1e8 ? fmt(trigOf(c[5])) : 'ไม่ถึง 1 ม.'}</b></div>`).join('')
     || '<div class="comrow"><span class="nm">ไม่พบชื่อชุมชนที่ค้นหา</span></div>';
   document.querySelectorAll('.comrow[data-i]').forEach(r => r.addEventListener('click', () => {
     const c = COMS[+r.dataset.i];
@@ -2010,12 +2030,12 @@ let LAST_MODEL_RUN_174 = null;
 let LAST_IMPACT_SCENARIOS = [];
 
 function impactStatus(remainingMcm, x44Stage, totalPeakQ) {
-  const leftOpen=totalPeakQ>=CITY_Q_CAPACITY,rightOpen=x44Stage>=RIGHT_BANK_BREACH_H;
+  const rightOpen=x44Stage>=RIGHT_BANK_BREACH_H;
+  const leftOpen=totalPeakQ>=CITY_Q_CAPACITY||rightOpen;
   if(remainingMcm<=0.005&&leftOpen)return {tone:'watch',text:'แม้สมดุลน้ำรายวันไม่เหลือน้ำส่วนเกิน แต่ Q รวมแตะ 1,680 ม³/วินาที — ยังอาจเกิดน้ำล้นชั่วขณะบริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา จึงต้องติดตาม Hydrograph รายชั่วโมง'};
   if(remainingMcm<=0.005)return {tone:'safe',text:'การระบายตามสมมติฐานรองรับได้ และยอด Q รวมยังไม่ถึง 1,680 ม³/วินาที'};
-  if(leftOpen&&rightOpen)return {tone:'danger',text:'Q รวมเกินความสามารถทางน้ำและระดับ X.44 ถึง 8.30 ม.รทก. — คาดว่าเริ่มกระทบบริเวณริมคลอง ร.1 ชุมชนลุ่มต่ำฝั่งซ้าย และชุมชนฝั่งขวาคลองอู่ตะเภารวมถึงเขตเศรษฐกิจหาดใหญ่ หากระดับน้ำเพิ่มต่อเนื่อง ความเสียหายอาจรุนแรงขึ้น'};
+  if(leftOpen&&rightOpen)return {tone:'danger',text:`ระดับ X.44 ถึง 8.30 ม.รทก. — ให้ถือว่าเริ่มเกิดน้ำล้นและส่งผลกระทบครบทั้งบริเวณริมคลอง ร.1 ชุมชนลุ่มต่ำฝั่งซ้าย และชุมชนฝั่งขวาคลองอู่ตะเภารวมถึงเขตเศรษฐกิจหาดใหญ่${totalPeakQ>=CITY_Q_CAPACITY?' โดย Q รวมเกินความสามารถทางน้ำ 1,680 ม³/วินาที':''} หากระดับน้ำเพิ่มต่อเนื่อง ความเสียหายอาจรุนแรงขึ้น`};
   if(leftOpen)return {tone:'danger',text:'Q รวมถึง 1,680 ม³/วินาที — คาดว่าเริ่มเกิดน้ำล้นบริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา ขณะที่ระดับ X.44 ยังไม่ถึงเกณฑ์ 8.30 ม.รทก. สำหรับพื้นที่ฝั่งขวา'};
-  if(rightOpen)return {tone:'danger',text:'ระดับ X.44 ถึง 8.30 ม.รทก. — คาดว่าเริ่มส่งผลกระทบต่อชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่ แม้ Q รวมยังไม่ถึง 1,680 ม³/วินาที หากระดับน้ำเพิ่มต่อเนื่อง ความเสียหายอาจรุนแรงขึ้น'};
   return {tone:'watch',text:'ยังไม่ถึงเกณฑ์เปิดทางน้ำทั้งสองฝั่ง แต่ให้ติดตามแนวโน้ม Q รวมและระดับ X.44 ต่อเนื่อง'};
 }
 
@@ -3713,16 +3733,20 @@ $('limits').innerHTML = `
   ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย และข้อมูลบางส่วนไม่ได้อัปเดตแบบเวลาจริง</div>
   <ul>
     <li><b>กติกาการเปิดพื้นที่บนแผนที่</b> ใช้แนวคลองและตลิ่งจากไฟล์ river.geojson เป็นขอบแบ่งการไหล:
-      พื้นที่บริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภาเริ่มได้รับผลกระทบเมื่อ <b>Q รวมก่อนไหลเข้าเมืองถึง 1,680 ม³/วินาที</b>
+      พื้นที่บริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภาเริ่มได้รับผลกระทบเมื่อ <b>Q รวมก่อนไหลเข้าเมืองถึง 1,680 ม³/วินาที</b> หรือเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b>
       ซึ่งเท่ากับความสามารถคลอง ร.1 1,200 + ทาง X.44 480 ม³/วินาที;
       พื้นที่ชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่เริ่มได้รับผลกระทบเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b>
       และมีแนวโน้มได้รับความเสียหายรุนแรงขึ้นหากระดับน้ำยังคงเพิ่มสูงต่อเนื่อง
-      เกณฑ์ทั้งสองทำงานแยกกัน และหลังเปิดทางน้ำจึงใช้ DEM กับรอยน้ำคำนวณความลึกในพื้นที่นั้น</li>
+      เมื่อ X.44 ถึง 8.30 ม.รทก. ให้ถือว่าเริ่มได้รับผลกระทบครบทั้งคลอง ร.1 และคลองอู่ตะเภาทั้งสองฝั่ง แม้ Q ที่เทียบจากสมการระดับ–ปริมาตรรายวันยังต่ำกว่า 1,680 ม³/วินาที</li>
+    <li><b>ความลึกหลังเริ่มล้นเพิ่มแบบค่อยเป็นค่อยไป</b> แยกจากเงื่อนไขเปิดพื้นที่ โดยใช้
+      <b>f = [(H − 8.30)/(Hอ้างอิง − 8.30)]<sup>0.65</sup></b> จำกัดค่าไว้ระหว่าง 0–1 แล้วคูณความลึกของรอยน้ำอ้างอิง
+      ทำให้ที่ 8.30 ม. ความลึกเริ่มใกล้ศูนย์ ไม่รับความลึกจากฐาน 7.20 ม. ทันที
+      สำหรับบริเวณริมคลอง ร.1 และฝั่งซ้าย ใช้ตัวคูณจาก Q รวมในลักษณะเดียวกันระหว่าง 1,680–4,022 ม³/วินาที และเลือกค่าที่สูงกว่าระหว่างผลจาก H กับ Q</li>
     <li><b>การกระจายน้ำใช้ Flood-fill</b> เริ่มจากเซลล์ติดแนวคลอง แล้วขยายไปยังเซลล์ข้างเคียงที่ต่ำกว่าผิวน้ำและมีทางต่อเนื่องกัน
       ไม่ให้ข้ามมุมที่ถูกปิดด้วยเซลล์แห้งสองด้าน จึงตัดแอ่งต่ำโดดเดี่ยวออกจากผลน้ำท่วม
       พื้นที่นอกช่วงแนวตลิ่งใน river.geojson จะไม่แสดงน้ำท่วมแบบคาดเดา และต้องเพิ่มข้อมูลทางเชื่อมก่อน</li>
-    <li><b>ข้อจำกัดใหญ่ที่สุด: มีข้อมูลรอยน้ำเพียงระดับเดียว</b> การปรับความลึกตามสัดส่วน
-      ระหว่าง 7.20 ถึง 9.97 จึงยังไม่มีข้อมูลยืนยัน สมมติว่ารูปแบบการท่วมคงรูปเดิม
+    <li><b>ข้อจำกัดใหญ่ที่สุด: มีข้อมูลรอยน้ำเพียงระดับเดียว</b> เส้นโค้งเพิ่มความลึกระหว่าง 8.30 ถึง 9.97 ม.รทก. จึงยังเป็นการปรับเบื้องต้น
+      โดยสมมติว่ารูปแบบการท่วมคงรูปเดิม
       เปลี่ยนแค่ความลึก ซึ่งจริง ๆ ขอบเขตน้ำท่วมควรค่อย ๆ ขยายจากริมคลองออกไป
       <b>แก้ได้ทันทีถ้าได้ระดับสูงสุดของ X.44 เหตุการณ์ ธ.ค. 68</b>
       ซึ่งจะปลดล็อกจุดสำรวจอีก 192 จุดที่ระดับต่างกัน</li>
