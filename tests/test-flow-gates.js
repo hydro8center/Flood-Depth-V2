@@ -24,7 +24,7 @@ function gatesAt(data, lat, lon, stage, totalQ) {
   assert(left.length && right.length, `missing both banks at latitude ${lat}`);
   const bankA = Math.max(...left), bankB = Math.min(...right);
   const west = Math.min(bankA, bankB), east = Math.max(bankA, bankB);
-  if (lon < west) return totalQ >= 1680;
+  if (lon < west) return totalQ >= 1680 || stage >= 8.30;
   if (lon > east) return stage >= 8.30;
   return true;
 }
@@ -42,9 +42,11 @@ for (const file of files) {
 
   assert.strictEqual(gatesAt(data, lat, west - 0.001, 8.17, 1679), false);
   assert.strictEqual(gatesAt(data, lat, west - 0.001, 8.17, 1680), true);
+  assert.strictEqual(gatesAt(data, lat, west - 0.001, 8.29, 1000), false);
+  assert.strictEqual(gatesAt(data, lat, west - 0.001, 8.30, 1000), true);
   assert.strictEqual(gatesAt(data, lat, east + 0.001, 8.29, 3000), false);
   assert.strictEqual(gatesAt(data, lat, east + 0.001, 8.30, 1000), true);
   assert.strictEqual(gatesAt(data, lat, (west + east) / 2, 7.00, 0), true);
 }
 
-console.log('river geometry and independent flow-gate thresholds: PASS');
+console.log('river geometry and coordinated flow-gate thresholds: PASS');
