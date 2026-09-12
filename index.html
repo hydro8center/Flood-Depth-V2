@@ -251,6 +251,10 @@
   .lvlrow .num{font-size:31px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.025em}
   .lvlrow .unit{font-size:13px;color:var(--muted);font-weight:500}
   .bankline{font-size:12.5px;margin:0 0 14px;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .flowgate{margin:12px 0 3px;padding:10px 12px;border-radius:12px;background:#F5FAFC;
+    border:1px solid var(--line2);font-size:12.5px;color:var(--muted)}
+  .flowgate b{color:var(--ink);font-size:15px}
+  .flowgate .gateon{color:#B65416}.flowgate .gateoff{color:var(--dry)}
   input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;margin:8px 0 2px}
   input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:99px;
     background:linear-gradient(90deg,var(--w1),var(--w5))}
@@ -832,6 +836,7 @@
       aria-label="ระดับน้ำที่สถานี X.44">
     <div class="scale"><span>6.50</span><span>ระดับตลิ่ง 7.15</span><span>10.50</span></div>
     <p class="homelevelnote" id="homeLevelNote"></p>
+    <p class="homelevelnote" id="homeFlowNote"></p>
   </section>
 
   <section class="answer">
@@ -878,6 +883,11 @@
     <div class="lvlrow" style="margin-top:2px"><span class="num" id="lvlNum">—</span>
       <span class="unit">ม.รทก. ที่สถานี X.44</span></div>
     <p class="bankline" id="bankline"></p>
+    <div class="flowgate"><span>Q รวมก่อนไหลเข้าเมือง <b id="cityQNum">—</b> ม³/วินาที</span>
+      <div id="flowGateNote"></div></div>
+    <input type="range" id="cityQSlider" min="0" max="4000" step="10" value="1110"
+      aria-label="ปริมาณน้ำรวมก่อนไหลเข้าเมือง">
+    <div class="scale"><span>0</span><span>เริ่มล้นฝั่งเหลือง 1,680</span><span>4,000</span></div>
     <input type="range" id="volSlider" min="0" max="300" step="1" value="96">
     <div class="scale"><span>0</span><span>150</span><span>300</span></div>
     <p class="vol" style="margin-top:6px">น้ำคงเหลือ <b id="volNum">96</b> ล้าน ลบ.ม./วัน
@@ -892,6 +902,7 @@
     <button class="lyr" data-l="shelter">ศูนย์พักพิง 2569</button>
     <button class="lyr" data-l="zone">ลำดับอพยพ</button>
     <button class="lyr" data-l="terrain">ภูมิประเทศ</button>
+    <button class="lyr active" data-l="river">แนวคลองและตลิ่ง</button>
     <button class="lyr" data-l="marks">จุดรอยน้ำ</button>
   </div>
   <div id="map"></div>
@@ -911,6 +922,8 @@
         <input type="number" id="inflow" value="248" min="0" max="600" step="1"></div>
       <div><label for="drain">ระบายออกได้ (ล้าน ลบ.ม./วัน)</label>
         <input type="number" id="drain" value="152" min="0" max="600" step="1"></div>
+      <div><label for="cityQ">Q รวมก่อนไหลเข้าเมือง (ม³/วินาที)</label>
+        <input type="number" id="cityQ" value="1110" min="0" max="10000" step="10"></div>
       <div><label for="h0">ระดับน้ำบ้านหาดใหญ่ใน สถานี X.44 (ม.รทก.)</label>
         <input type="number" id="h0" value="7.20" min="6" max="9" step="0.05"></div>
       <div><label for="href">ระดับอ้างอิงเหตุการณ์ (ม.รทก.)</label>
@@ -1047,6 +1060,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="flood-fill.js?v=0.4.2"></script>
 <script src="forecast-model.js?v=0.4.0"></script>
 <script src="hydrograph-analog.js?v=0.4.0"></script>
 <script src="hydrograph-analog-ui.js?v=0.4.0"></script>
@@ -1063,6 +1077,8 @@ const RESID_PNG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAigAAAJiCAAAAADIp
    ค่าคงที่: สมการมาจากเอกสาร, เกณฑ์ล้นคลองมาจากผู้ใช้, ผิวน้ำมาจากการปรับเทียบ
    ========================================================================= */
 const EQ_A = 0.0097, EQ_B = 7.2383;
+const CITY_Q_CAPACITY = 1680, R1_Q_CAPACITY = 1200, X44_Q_CAPACITY = 480;
+const RIGHT_BANK_BREACH_H = 8.30, MCM_DAY_PER_CMS = 0.0864;
 let H0 = 7.20;                 // ระดับที่น้ำเริ่มล้นคลองอู่ตะเภา — ต่ำกว่านี้ไม่ท่วม
 let HREF = MODEL.href;         // 9.97 ม.รทก. 25 พ.ย. 68 (SWOC)
 const BANK = MODEL.bank;
@@ -1084,6 +1100,7 @@ const DN = (() => {
   for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
   return { a, w: DNEAR.w, h: DNEAR.h, f: DNEAR.f, s: DNEAR.scale };
 })();
+let FLOW_BANKS = null, RIVER_GEOMETRY = null, FLOOD_FILL_CACHE = null;
 
 /* ---------- ระดับความลึกและสี ---------- */
 const CLS = [
@@ -1176,6 +1193,52 @@ function dNearAt(lat, lon) {
   return DN.a[r * DN.w + c] * DN.s;
 }
 
+function bankProfile(coords, choose) {
+  const profile = new Float64Array(DM.h); profile.fill(NaN);
+  for (let rowIndex = 0; rowIndex < DM.h; rowIndex++) {
+    const lat = DM.lat1 - (rowIndex + .5) * DM.step, crossings = [];
+    for (let i = 1; i < coords.length; i++) {
+      const a = coords[i - 1], b = coords[i];
+      if ((lat < Math.min(a[1], b[1])) || (lat > Math.max(a[1], b[1])) || a[1] === b[1]) continue;
+      const t = (lat - a[1]) / (b[1] - a[1]);
+      if (t >= 0 && t <= 1) crossings.push(a[0] + t * (b[0] - a[0]));
+    }
+    if (crossings.length) profile[rowIndex] = choose === 'max' ? Math.max(...crossings) : Math.min(...crossings);
+  }
+  return profile;
+}
+function buildFlowBanks(data) {
+  const features = data && data.features;
+  if (!features || features.length < 3) throw new Error('ข้อมูลแนวตลิ่งไม่ครบ');
+  // เส้นที่ 2 เป็นแนวตลิ่งฝั่งซ้ายของคลองอู่ตะเภา (เลือกจุดตัดตะวันออกสุด)
+  // เส้นที่ 3 เป็นแนวตลิ่งฝั่งขวา (เลือกจุดตัดตะวันตกสุด)
+  FLOW_BANKS = {
+    west: bankProfile(features[1].geometry.coordinates, 'max'),
+    east: bankProfile(features[2].geometry.coordinates, 'min')
+  };
+}
+function flowGateAt(lat, lon, h = H, q = TOTAL_Q) {
+  if (!FLOW_BANKS) return { allowed:false, region:'unrouted', label:'ยังไม่มีข้อมูลแนวทางน้ำ', threshold:'โหลดแนวคลองและตลิ่งให้สำเร็จ' };
+  const rowIndex = Math.round(row(lat));
+  if (rowIndex < 0 || rowIndex >= DM.h) return { allowed:false, region:'unrouted', label:'นอกขอบเขตแบบจำลองทางน้ำ', threshold:'ข้อมูลแนวคลองที่ตรวจสอบแล้ว' };
+  const bankA = FLOW_BANKS.west[rowIndex], bankB = FLOW_BANKS.east[rowIndex];
+  if (!Number.isFinite(bankA) || !Number.isFinite(bankB)) return { allowed:false, region:'unrouted', label:'นอกช่วงแนวตลิ่งที่ตรวจสอบ', threshold:'ข้อมูลทางเชื่อมจากคลองเพิ่มเติม' };
+  // บริเวณทางแยก/บรรจบ เส้นสองฝั่งอาจไขว้ลำดับกัน จึงเรียงตะวันตก–ตะวันออกทุกแถว
+  const west = Math.min(bankA, bankB), east = Math.max(bankA, bankB);
+  if (lon < west) return { allowed:q >= CITY_Q_CAPACITY, region:'yellow', label:'พื้นที่ฝั่งเหลือง', threshold:`Q รวม ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที` };
+  if (lon > east) return { allowed:h >= RIGHT_BANK_BREACH_H, region:'green', label:'พื้นที่ฝั่งขวา', threshold:`X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
+  return { allowed:true, region:'channel', label:'แนวคลอง/ระหว่างตลิ่ง' };
+}
+
+async function loadRiverGeometry() {
+  const response = await fetch('data/river.geojson', { cache:'no-store' });
+  if (!response.ok) throw new Error(`อ่านแนวคลองไม่สำเร็จ (${response.status})`);
+  const data = await response.json();
+  RIVER_GEOMETRY = data; FLOOD_FILL_CACHE = null;
+  buildFlowBanks(data); riverLayer.clearLayers().addData(data);
+  return data;
+}
+
 const factor = h => Math.max(0, (h - H0) / (HREF - H0));
 
 function solve(lat, lon, h) {
@@ -1183,12 +1246,15 @@ function solve(lat, lon, h) {
   if (!t) return { ok: false, why: 'outside' };
   const dn = dNearAt(lat, lon);
   if (dn > 2000) return { ok: false, why: 'far', dn };
-  const depth = t.dRef * factor(h);
+  let gate = flowGateAt(lat, lon, h, TOTAL_Q);
+  const connected = floodConnectedAt(lat, lon, h, TOTAL_Q);
+  if (gate.allowed && connected === false) gate = { allowed:false, region:'isolated', label:'แอ่งต่ำที่ไม่เชื่อมกับแนวคลอง', threshold:'เส้นทางน้ำต่อเนื่องตาม DEM' };
+  const depth = gate.allowed ? t.dRef * factor(h) : 0;
   const sd = (dn <= 500 ? 0.49 : dn <= 1000 ? 0.52 : 0.60) * Math.max(0.35, factor(h));
   const tier = dn <= 500 ? ['สูง', 'var(--dry)'] : dn <= 1000 ? ['ปานกลาง', 'var(--warm)'] : ['ต่ำ', 'var(--z2)'];
   const t10 = t.dRef > 0.02 ? H0 + 1.0 * (HREF - H0) / t.dRef : 1e9;
   const onset = t.dRef > 0.02 ? H0 + 0.05 * (HREF - H0) / t.dRef : 1e9;
-  return { ok: true, depth, z: t.z, dRef: t.dRef, wse: t.z + depth, dn, sd, tier, t10, onset, zone: zoneOf(t10) };
+  return { ok: true, depth, z: t.z, dRef: t.dRef, wse: t.z + depth, dn, sd, tier, t10, onset, zone: zoneOf(t10), gate };
 }
 
 /* =========================================================================
@@ -1239,7 +1305,9 @@ function drawGauge(depth) {
 /* =========================================================================
    แผนที่
    ========================================================================= */
-let H = stage(96), here = null, youMarker = null, youHalo = null;
+let H = stage(96), TOTAL_Q = Math.max(0, volOf(stage(96))) / MCM_DAY_PER_CMS;
+let TOTAL_Q_SOURCE = 'ประเมินจากสมการระดับ–ปริมาณน้ำรายวัน';
+let here = null, youMarker = null, youHalo = null;
 const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([7.007, 100.470], 13);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -1249,6 +1317,7 @@ L.control.attribution({ position: 'bottomleft', prefix: false })
   .addAttribution('© OpenStreetMap, CARTO · DEM และรอยน้ำท่วม: กรมชลประทาน').addTo(map);
 map.createPane('tp'); map.getPane('tp').style.zIndex = 350;
 map.createPane('fp'); map.getPane('fp').style.zIndex = 360;
+map.createPane('river'); map.getPane('river').style.zIndex = 420;
 map.createPane('selection'); map.getPane('selection').style.zIndex = 700;
 map.getPane('selection').style.pointerEvents = 'none';
 const IMG_BOUNDS = [[DM.lat0, DM.lon0], [DM.lat1, DM.lon1]];
@@ -1256,6 +1325,7 @@ const terrainLayer = L.imageOverlay('', IMG_BOUNDS, { opacity: .75, pane: 'tp' }
 const floodLayer = L.imageOverlay('', IMG_BOUNDS, { opacity: .78, pane: 'fp' });
 const zoneLayer = L.imageOverlay('', IMG_BOUNDS, { opacity: .62, pane: 'fp' });
 const safeLayer = L.imageOverlay('', IMG_BOUNDS, { opacity: .55, pane: 'fp' });
+const riverLayer = L.geoJSON(null, { pane:'river', interactive:false, style:{ color:'#0878B9', weight:2.4, opacity:.95 } });
 const markLayer = L.layerGroup();
 /* พิกัดสถานี X.44 บ้านหาดใหญ่ใน จากตารางสถานีตรวจวัดน้ำท่าในคู่มือ */
 const X44 = [7.0022, 100.4561];
@@ -1317,15 +1387,92 @@ const hatch = (o, k, x, y) => {
   else o[k + 3] = 0;
 };
 
+const floodFillKey = (h = H, q = TOTAL_Q) => `${h.toFixed(3)}|${q.toFixed(1)}|${H0.toFixed(3)}|${HREF.toFixed(3)}|${DISPLAY_RF}`;
+
+function buildRiverSeedMask(candidate, w, h) {
+  const seeds = new Uint8Array(w * h);
+  if (!RIVER_GEOMETRY || !Array.isArray(RIVER_GEOMETRY.features)) return seeds;
+  const radius = 3; // ประมาณ 66 ม. บน PC และ 100 ม. บนมือถือ เพื่อหาเซลล์ต่ำข้างแนวตลิ่ง
+  const mark = (cx, cy) => {
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      const index = y * w + x;
+      if (candidate[index]) seeds[index] = 1;
+    }
+  };
+  for (const feature of RIVER_GEOMETRY.features) {
+    const coords = feature && feature.geometry && feature.geometry.type === 'LineString'
+      ? feature.geometry.coordinates : [];
+    for (let i = 1; i < coords.length; i++) {
+      const a = coords[i - 1], b = coords[i];
+      const x0 = col(a[0]) / DISPLAY_RF, y0 = row(a[1]) / DISPLAY_RF;
+      const x1 = col(b[0]) / DISPLAY_RF, y1 = row(b[1]) / DISPLAY_RF;
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        mark(Math.round(x0 + (x1 - x0) * t), Math.round(y0 + (y1 - y0) * t));
+      }
+    }
+  }
+  return seeds;
+}
+
+function floodConnectedAt(lat, lon, h = H, q = TOTAL_Q) {
+  const cache = FLOOD_FILL_CACHE;
+  if (!cache || cache.key !== floodFillKey(h, q)) return null;
+  const x = Math.round(col(lon) / DISPLAY_RF), y = Math.round(row(lat) / DISPLAY_RF);
+  if (x < 0 || y < 0 || x >= cache.w || y >= cache.h) return false;
+  return !!cache.mask[y * cache.w + x];
+}
+
 function renderFlood() {
   const f = factor(H), RGB = CLS.map(c => hex(c.c));
-  floodLayer.setUrl(eachCell((o, k, c) => {
-    if (c.dn > 2000) return hatch(o, k, c.x, c.y);
-    const dep = c.dRef * f;
-    if (dep <= 0.05) { o[k + 3] = 0; return; }
+  const { c, g, w, h } = makeCanvas(), size = w * h;
+  const im = g.createImageData(w, h), o = im.data;
+  const candidate = new Uint8Array(size), depths = new Float32Array(size), hatched = new Uint8Array(size);
+  let potentialCells = 0;
+  for (let y = 0; y < h; y++) {
+    const fullY = y * DISPLAY_RF;
+    const lat = DM.lat1 - (fullY + .5) * DM.step, yy = my(lat);
+    const rY = Math.min(DM.rh - 1, Math.round(fullY / DM.rf));
+    const dY = Math.round(fullY / DN.f);
+    for (let x = 0; x < w; x++) {
+      const fullX = x * DISPLAY_RF, index = y * w + x;
+      const fullIndex = fullY * DM.w + fullX;
+      if (Z[fullIndex] < 0) continue;
+      const dX = Math.round(fullX / DN.f);
+      const dn = (dX < DN.w && dY < DN.h) ? DN.a[dY * DN.w + dX] * DN.s : 99999;
+      if (dn > 2000) { hatched[index] = 1; continue; }
+      const lon = DM.lon0 + (fullX + .5) * DM.step;
+      const rX = Math.min(DM.rw - 1, Math.round(fullX / DM.rf));
+      const z = Z[fullIndex] / DM.zScale;
+      const dRef = Math.max(0, planeAt(mx(lon), yy) + residIdx(rY * DM.rw + rX) - z);
+      const dep = dRef * f;
+      if (dep <= 0.05 || !flowGateAt(lat, lon, H, TOTAL_Q).allowed) continue;
+      candidate[index] = 1; depths[index] = dep; potentialCells++;
+    }
+  }
+  const seeds = buildRiverSeedMask(candidate, w, h);
+  const connected = window.FloodFillEngine && typeof FloodFillEngine.connectedMask === 'function'
+    ? FloodFillEngine.connectedMask(w, h, candidate, seeds) : new Uint8Array(size);
+  let wetCells = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const index = y * w + x, k = index * 4;
+    if (hatched[index]) { hatch(o, k, x, y); continue; }
+    if (!connected[index]) continue;
+    const dep = depths[index]; wetCells++;
     let ci = 1; while (ci < 5 && dep >= CLS[ci].max) ci++;
     o[k] = RGB[ci][0]; o[k + 1] = RGB[ci][1]; o[k + 2] = RGB[ci][2]; o[k + 3] = 225;
-  }));
+  }
+  g.putImageData(im, 0, 0);
+  floodLayer.setUrl(c.toDataURL('image/png'));
+  FLOOD_FILL_CACHE = { key:floodFillKey(), w, h, mask:connected };
+  const cellArea = (DM.step * KX * DISPLAY_RF) * (DM.step * KY * DISPLAY_RF) / 1e6;
+  const shownArea = wetCells * cellArea, removedArea = (potentialCells - wetCells) * cellArea;
+  $('areaOut').innerHTML = `พื้นที่น้ำท่วมที่เชื่อมจากคลองด้วย Flood-fill ราว <b>${fmt(shownArea, 1)}</b> ตร.กม.`
+    + (removedArea > 0.05 ? ` · ตัดแอ่งแยกออก ${fmt(removedArea, 1)} ตร.กม.` : '');
 }
 function renderZone() {
   const RGB = ZONES.map(z => hex(z.c));
@@ -1474,7 +1621,7 @@ function render() {
   $('bankline').innerHTML = H >= H0
     ? `<span style="color:var(--z2)">สูงกว่าระดับเริ่มล้น ${fmt(H - H0)} ม.</span> · ระดับเริ่มล้นที่ X.44 ${fmt(H0)} ม.รทก.`
     : `<span style="color:var(--dry)">ต่ำกว่าระดับเริ่มล้นที่ X.44 ${fmt(H0 - H)} ม. — ยังไม่ท่วม</span>`;
-  $('areaOut').innerHTML = `ท่วมราว <b>${fmt(areaAt(H), 1)}</b> ตร.กม.`;
+  $('areaOut').innerHTML = `พื้นที่ศักยภาพจาก DEM ไม่เกิน <b>${fmt(areaAt(H), 1)}</b> ตร.กม. · กำลังคัดตามทางน้ำ`;
   document.querySelectorAll('.preset').forEach(b => b.classList.toggle('active', Math.abs(+b.dataset.h - H) < 0.005));
 
   if (!here) {
@@ -1498,12 +1645,15 @@ function render() {
   $('depthNum').style.color = s.depth > 0.05 ? inkOf(c) : 'var(--dry)';
   $('verdict').innerHTML = `<span style="color:${s.depth > 0.05 ? inkOf(c) : 'var(--dry)'}">${c.t}</span>`
     + (c.h ? ` <span style="color:var(--muted);font-weight:400">· ${c.h}</span>` : '');
-  $('range').textContent = s.depth > 0.05
+  $('range').textContent = !s.gate.allowed
+    ? `${s.gate.label}ยังไม่เปิดรับน้ำ — ต้องถึง ${s.gate.threshold}`
+    : s.depth > 0.05
     ? `ช่วงที่เป็นไปได้ ${fmt(Math.max(0, s.depth - s.sd))} – ${fmt(s.depth + s.sd)} ม.`
     : (s.dRef > 0.05
       ? `น้ำจะเริ่มถึงตำแหน่งนี้เมื่อ X.44 สูงกว่า ${fmt(s.onset)} ม.รทก.`
       : 'จุดนี้อยู่สูงพอที่จะไม่ท่วม แม้ที่ระดับสูงสุดเป็นสถิติ');
   $('chips').innerHTML = `
+    <span class="chip">ทางน้ำ <b>${s.gate.label}</b>${s.gate.threshold?` · เกณฑ์ ${s.gate.threshold}`:''}</span>
     <span class="chip">ระดับพื้นดิน <b>${fmt(s.z)}</b> ม.รทก.</span>
     ${s.depth > 0.05 ? `<span class="chip">ผิวน้ำ <b>${fmt(s.wse)}</b> ม.รทก.</span>` : ''}
     ${s.t10 < 1e8 ? `<span class="chip"><span class="swatch" style="background:${ZONES[s.zone].c}"></span>${ZONES[s.zone].t} · ลึก 1 ม. ที่ X.44 <b>${fmt(s.t10)}</b></span>` : ''}
@@ -1529,6 +1679,10 @@ document.querySelectorAll('.preset').forEach(b =>
 function setH(h, src) {
   if (!isFinite(h)) return;
   H = Math.max(0, Math.min(14, h));
+  if (src !== 'forecastImpact') {
+    TOTAL_Q = Math.max(0, volOf(H)) / MCM_DAY_PER_CMS;
+    TOTAL_Q_SOURCE = 'ประเมินจากสมการระดับ–ปริมาณน้ำรายวัน';
+  }
   if (AUTO && src) setMode(false, true);
   syncFields(src);
   update(true);
@@ -1550,6 +1704,20 @@ function syncFields(src) {
   el('volNum').textContent = Math.round(v);
   el('advout').innerHTML = `คงเหลือ <b>${Math.round(v)}</b> ล้าน ลบ.ม./วัน → X.44 = <b>${fmt(H)}</b> ม.รทก.`
     + (v > 300 ? ' <span style="color:var(--z3)">(เกินช่วงข้อมูลของสมการ)</span>' : '');
+  if (src !== 'cityQSlider') el('cityQSlider').value = Math.max(0, Math.min(4000, Math.round(TOTAL_Q / 10) * 10));
+  if (src !== 'cityQ' && document.activeElement !== el('cityQ')) el('cityQ').value = Math.round(TOTAL_Q);
+  el('cityQNum').textContent = fmt(TOTAL_Q, 0);
+  const leftOpen = TOTAL_Q >= CITY_Q_CAPACITY, rightOpen = H >= RIGHT_BANK_BREACH_H;
+  el('flowGateNote').innerHTML = `<span class="${leftOpen?'gateon':'gateoff'}">ฝั่งเหลือง ${leftOpen?'เริ่มรับน้ำ':'ยังไม่ล้น'}</span> · `
+    + `<span class="${rightOpen?'gateon':'gateoff'}">ฝั่งขวา ${rightOpen?'จุดรั่วเปิด':'ยังไม่ถึง 8.30 ม.'}</span><br><small>${TOTAL_Q_SOURCE}</small>`;
+  el('homeFlowNote').innerHTML = `Q รวมก่อนเข้าเมืองประมาณ <b>${fmt(TOTAL_Q,0)} ม³/วินาที</b> · `
+    + `คลอง ร.1 รับได้ ${R1_Q_CAPACITY.toLocaleString('th-TH')} + ทาง X.44 ${X44_Q_CAPACITY.toLocaleString('th-TH')} = ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที`;
+}
+
+function setTotalQ(q, src, sourceLabel) {
+  if (!Number.isFinite(q)) return;
+  TOTAL_Q = Math.max(0, q); TOTAL_Q_SOURCE = sourceLabel || 'ผู้ใช้กำหนดเอง';
+  syncFields(src); update(true);
 }
 
 let timer = null, mapOverlayDirty = false;
@@ -1571,6 +1739,10 @@ function update(fast) {
 $('volSlider').addEventListener('input', e => { clearDay(); setH(stage(+e.target.value), 'slider'); });
 $('homeLevelSlider').addEventListener('input', e => {
   clearDay(); setH(+e.target.value, 'homeLevel');
+});
+$('cityQSlider').addEventListener('input', e => setTotalQ(+e.target.value, 'cityQSlider', 'ผู้ใช้กำหนด Q รวมเอง'));
+$('cityQ').addEventListener('input', e => {
+  const q = parseFloat(e.target.value); if (Number.isFinite(q)) setTotalQ(q, 'cityQ', 'ผู้ใช้กำหนด Q รวมเอง');
 });
 $('wl').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
@@ -1598,7 +1770,7 @@ $('href').addEventListener('change', e => {
 });
 
 const LAYERS = { terrain: terrainLayer, flood: floodLayer, zone: zoneLayer, safe: safeLayer,
-                 shelter: shelterLayer, marks: markLayer, com: comLayer };
+                 river: riverLayer, shelter: shelterLayer, marks: markLayer, com: comLayer };
 document.querySelectorAll('.lyr').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.l, on = !b.classList.contains('active');
   b.classList.toggle('active', on);
@@ -1622,6 +1794,7 @@ function setLegend() {
   if (map.hasLayer(shelterLayer)) items.unshift(
     '<span><i style="background:#1D7A5A"></i>ศูนย์พักพิง 2569</span>' +
     '<span><i style="background:#E04A2F"></i>ศูนย์ที่แบบจำลองว่าเคยท่วม</span>');
+  if (map.hasLayer(riverLayer)) items.unshift('<span><i style="background:#0878B9;height:3px"></i>แนวตลิ่งคลอง ร.1–คลองอู่ตะเภา</span>');
   $('legend').innerHTML = items.join('') +
     `<span><i style="background:#96ACB8"></i>ไม่มีข้อมูลรองรับ</span>`;
 }
@@ -1836,28 +2009,22 @@ let BASIN_MAP_174 = null;
 let LAST_MODEL_RUN_174 = null;
 let LAST_IMPACT_SCENARIOS = [];
 
-function impactStatus(remainingMcm, x44Stage) {
-  if (remainingMcm <= 0.005) return {
-    tone:'safe', text:'การระบายตามสมมติฐานรองรับได้ — ไม่เหลือน้ำส่วนเกินสำหรับแผ่ท่วม'
-  };
-  if (x44Stage < 7.40) return {
-    tone:'watch', text:'มีน้ำส่วนเกินและระดับเข้าใกล้ช่วงเริ่มล้น — ควรเฝ้าระวังตลาดยรรยงค์และบ้านหาดใหญ่ใน'
-  };
-  if (x44Stage < 8.30) return {
-    tone:'watch', text:'คาดว่าเริ่มล้นตลิ่งฝั่งซ้ายบริเวณบ้านหาดใหญ่ใน'
-  };
-  if (x44Stage < 10.00) return {
-    tone:'danger', text:'คาดว่าน้ำล้นทั้งฝั่งซ้ายและเริ่มกระทบฝั่งขวาบริเวณที่ว่าการอำเภอหาดใหญ่'
-  };
-  return {tone:'danger', text:'คาดว่าน้ำท่วมแผ่ขยายในพื้นที่อำเภอหาดใหญ่'};
+function impactStatus(remainingMcm, x44Stage, totalPeakQ) {
+  const leftOpen=totalPeakQ>=CITY_Q_CAPACITY,rightOpen=x44Stage>=RIGHT_BANK_BREACH_H;
+  if(remainingMcm<=0.005&&leftOpen)return {tone:'watch',text:'สมดุลน้ำรายวันไม่เหลือน้ำส่วนเกิน แต่ยอด Q รวมแตะ 1,680 ม³/วินาที — ยังมีโอกาสล้นชั่วขณะสู่พื้นที่ฝั่งเหลือง ต้องตรวจ Hydrograph รายชั่วโมง'};
+  if(remainingMcm<=0.005)return {tone:'safe',text:'การระบายตามสมมติฐานรองรับได้ และยอด Q รวมยังไม่ถึง 1,680 ม³/วินาที'};
+  if(leftOpen&&rightOpen)return {tone:'danger',text:'Q รวมเกินความสามารถระบายและ X.44 ถึงจุดรั่ว — คาดว่าน้ำเริ่มกระจายทั้งพื้นที่ฝั่งเหลืองและฝั่งขวา'};
+  if(leftOpen)return {tone:'danger',text:'Q รวมถึง 1,680 ม³/วินาที — คาดว่าเริ่มท่วมพื้นที่ฝั่งเหลือง แต่จุดรั่วฝั่งขวายังไม่เปิด'};
+  if(rightOpen)return {tone:'danger',text:'X.44 ถึง 8.30 ม. — จุดรั่วฝั่งขวาเปิด แม้ Q รวมยังไม่เกินความสามารถระบาย 1,680 ม³/วินาที'};
+  return {tone:'watch',text:'ยังไม่ถึงเกณฑ์เปิดทางน้ำทั้งสองฝั่ง แต่ให้ติดตามแนวโน้ม Q รวมและระดับ X.44 ต่อเนื่อง'};
 }
 
 function x90ForecastVolume(run,index){
   const models=[];
-  if(run.uhResult)models.push({key:'unit',name:'Unit Hydrograph',volume:+run.uhResult.daily[index].volume_mcm_day});
+  if(run.uhResult)models.push({key:'unit',name:'Unit Hydrograph',volume:+run.uhResult.daily[index].volume_mcm_day,peakQ:+run.uhResult.daily[index].peak_q_cms});
   if(run.directResult){
     const q=+run.directResult.horizons[index].q_x90_cms;
-    models.push({key:'direct',name:'สมการเดิม',volume:HatYaiForecastModel.dailyVolumeMcm(q)});
+    models.push({key:'direct',name:'สมการเดิม',volume:HatYaiForecastModel.dailyVolumeMcm(q),peakQ:q});
   }
   const chosen=models.reduce((best,item)=>!best||item.volume>best.volume?item:best,null);
   return {models,chosen,volume:Math.max(0,chosen?chosen.volume:0)};
@@ -1867,11 +2034,14 @@ function buildImpactScenario(index, percentages, drainageMcm) {
   const x90=x90ForecastVolume(LAST_MODEL_RUN,index);
   const x90Volume=x90.volume;
   const x174Volume=Math.max(0,+LAST_MODEL_RUN_174.result.daily[index].volume_mcm_day);
+  const x174PeakQ=Math.max(0,+LAST_MODEL_RUN_174.result.daily[index].peak_q_cms);
   const modeledBase=x90Volume+x174Volume;
   const rianVolume=modeledBase*Math.max(0,percentages.rian)/100;
   const wadVolume=modeledBase*Math.max(0,percentages.wad)/100;
   const tamVolume=modeledBase*Math.max(0,percentages.tam)/100;
   const totalInflow=modeledBase+rianVolume+wadVolume+tamVolume;
+  const modeledBasePeakQ=Math.max(0,(x90.chosen?x90.chosen.peakQ:0)+x174PeakQ);
+  const totalPeakQ=modeledBasePeakQ*(1+Math.max(0,percentages.rian+percentages.wad+percentages.tam)/100);
   const remaining=Math.max(0,totalInflow-Math.max(0,drainageMcm));
   const equationStage=stage(remaining);
   // เมื่อไม่มีน้ำส่วนเกิน ไม่ใช้ค่าคงที่ 7.2383 ของสมการมาตีความว่าเกิดน้ำท่วม
@@ -1879,8 +2049,8 @@ function buildImpactScenario(index, percentages, drainageMcm) {
   const floodedArea=remaining<=0.005?0:areaAt(mapStage);
   return {
     index,date:forecastDate(LAST_MODEL_RUN.issuedDate,index+1),models:x90.models,chosen:x90.chosen,percentages,drainageMcm,
-    x90Volume,x174Volume,modeledBase,rianVolume,wadVolume,tamVolume,totalInflow,remaining,equationStage,mapStage,floodedArea,
-    status:impactStatus(remaining,mapStage)
+    x90Volume,x174Volume,modeledBase,rianVolume,wadVolume,tamVolume,totalInflow,remaining,equationStage,mapStage,floodedArea,totalPeakQ,
+    status:impactStatus(remaining,mapStage,totalPeakQ)
   };
 }
 
@@ -1902,9 +2072,10 @@ function renderForecastImpact(){
       คลองเรียน <b>${fmt(impact.rianVolume,3)}</b> + คลองวาด <b>${fmt(impact.wadVolume,3)}</b> + คลองต่ำ <b>${fmt(impact.tamVolume,3)}</b><br>
       = น้ำเข้ารวม <b>${fmt(impact.totalInflow,3)}</b> − ระบาย <b>${fmt(impact.drainageMcm,3)}</b><br>
       = น้ำคงเหลือ <b>${fmt(impact.remaining,3)} ล้าน ลบ.ม./วัน</b><br>
+      Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> (${impact.totalPeakQ>=CITY_Q_CAPACITY?'ถึง':'ยังไม่ถึง'}เกณฑ์ 1,680)<br>
       ${impact.remaining<=0.005
         ? `ไม่เหลือน้ำส่วนเกิน จึงใช้ระดับเริ่มล้น X.44 <b>${fmt(H0)} ม.รทก.</b> เป็นขอบบนสำหรับแผนที่`
-        : `สมการ H = 0.0097V + 7.2383 → X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> · พื้นที่ท่วมราว <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}
+        : `สมการ H = 0.0097V + 7.2383 → X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> · พื้นที่ศักยภาพจาก DEM ก่อนคัดทางน้ำไม่เกิน <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}
     </div>
     <div class="impactmodels">X.90: ${impactModelText(impact)}${impact.models.length>1?` (ใช้ค่าที่สูงกว่า: ${impact.chosen.name})`:''}<br>X.174: Unit Hydrograph</div>
     <button class="impactmapbtn" data-impact-index="${impact.index}">แสดงผลวันนี้บนแผนที่</button>
@@ -1915,6 +2086,7 @@ function applyImpactToMap(index){
   const impact=LAST_IMPACT_SCENARIOS[index];if(!impact)return;
   $('drain').value=impact.drainageMcm.toFixed(3);
   clearDay();setH(impact.mapStage,'forecastImpact');
+  setTotalQ(impact.totalPeakQ,'forecastImpact','Q สูงสุดรวมจากแบบจำลองรายชั่วโมง (รวมยอดแบบอนุรักษ์)');
   $('inflow').value=impact.totalInflow.toFixed(3);
   $('advout').innerHTML=`คาดการณ์น้ำเข้ารวม <b>${fmt(impact.totalInflow,3)}</b> − ระบาย <b>${fmt(impact.drainageMcm,3)}</b> = คงเหลือ <b>${fmt(impact.remaining,3)}</b> ล้าน ลบ.ม./วัน → X.44 = <b>${fmt(impact.mapStage)}</b> ม.รทก.`;
   $('mapImpactTag').textContent=`ผล ${impact.date.label} · ใช้ ${impact.chosen.name}`;
@@ -1922,9 +2094,10 @@ function applyImpactToMap(index){
   $('mapImpactAnswer').textContent=impact.status.text;
   $('mapImpactMath').innerHTML=`X.90 <b>${fmt(impact.x90Volume,3)}</b> + X.174 <b>${fmt(impact.x174Volume,3)}</b> + คลองเรียน <b>${fmt(impact.rianVolume,3)}</b> + คลองวาด <b>${fmt(impact.wadVolume,3)}</b> + คลองต่ำ <b>${fmt(impact.tamVolume,3)}</b> = น้ำเข้ารวม <b>${fmt(impact.totalInflow,3)}</b><br>
     หักระบาย <b>${fmt(impact.drainageMcm,3)}</b> → คงเหลือ <b>${fmt(impact.remaining,3)} ล้าน ลบ.ม./วัน</b><br>
+    Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> · ความสามารถคลอง ร.1 + ทาง X.44 = <b>1,680 ม³/วินาที</b><br>
     ${impact.remaining<=0.005
       ? `ความสามารถระบายมากกว่าน้ำเข้า จึงไม่ใช้ค่าคงที่ของสมการมาตีความว่าเกิดน้ำท่วม และแสดงแผนที่ที่ระดับเริ่มล้น <b>${fmt(H0)} ม.รทก.</b>`
-      : `แทน V ใน H = 0.0097V + 7.2383 ได้ X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> และพื้นที่ท่วมประมาณ <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}<br>
+      : `แทน V ใน H = 0.0097V + 7.2383 ได้ X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> และพื้นที่ศักยภาพจาก DEM ก่อนคัดทางน้ำไม่เกิน <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}<br>
     <span>คลองเรียน–คลองวาด–คลองต่ำเป็นค่าประเมินร้อยละที่ยังไม่สอบเทียบ · ผลนี้ใช้ประกอบการเฝ้าระวัง ไม่ใช่ประกาศเตือนภัยทางการ</span>`;
   $('forecastMapImpact').classList.add('on');
   showTab('map');
@@ -3343,8 +3516,8 @@ const X44_MARKS = [
   [5.38, 'เกณฑ์เสี่ยง — หากยังขึ้นต่อเนื่อง อีกประมาณ 8 ชั่วโมงระดับน้ำจะถึงตลิ่ง'],
   [5.85, 'เกณฑ์เสี่ยง — หากยังขึ้นต่อเนื่อง อีกประมาณ 6 ชั่วโมงระดับน้ำจะถึงตลิ่ง'],
   [7.15, 'ระดับตลิ่ง — น้ำเริ่มล้นคันคลองอู่ตะเภาบริเวณตลาดยรรยงค์'],
-  [7.40, 'เริ่มล้นตลิ่งฝั่งซ้ายบริเวณบ้านหาดใหญ่ใน'],
-  [8.30, 'เริ่มล้นตลิ่งฝั่งขวาบริเวณที่ว่าการอำเภอหาดใหญ่'],
+  [7.40, 'ระดับเฝ้าระวังฝั่งซ้ายตามคู่มือเดิม (แผนที่ใช้ Q รวม 1,680 ม³/วินาทีเป็นเกณฑ์เปิดพื้นที่สีเหลือง)'],
+  [8.30, 'จุดรั่วฝั่งขวาเริ่มเปิดบริเวณที่ว่าการอำเภอหาดใหญ่'],
   [10.00, 'น้ำท่วมแผ่ขยายในพื้นที่อำเภอหาดใหญ่']
 ];
 const UPSTREAM = [
@@ -3539,6 +3712,14 @@ $('limits').innerHTML = `
   <div class="warn"><b>ขอบเขตการใช้งาน</b>
   ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย และข้อมูลบางส่วนไม่ได้อัปเดตแบบเวลาจริง</div>
   <ul>
+    <li><b>กติกาการเปิดพื้นที่บนแผนที่</b> ใช้แนวคลองและตลิ่งจากไฟล์ river.geojson เป็นขอบแบ่งการไหล:
+      พื้นที่สีเหลืองเริ่มรับน้ำเมื่อ <b>Q รวมก่อนไหลเข้าเมืองถึง 1,680 ม³/วินาที</b>
+      ซึ่งเท่ากับความสามารถคลอง ร.1 1,200 + ทาง X.44 480 ม³/วินาที;
+      พื้นที่ฝั่งขวาเริ่มรับน้ำเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b> ที่จุดรั่วฝั่งขวา
+      เกณฑ์ทั้งสองทำงานแยกกัน และหลังเปิดทางน้ำจึงใช้ DEM กับรอยน้ำคำนวณความลึกในพื้นที่นั้น</li>
+    <li><b>การกระจายน้ำใช้ Flood-fill</b> เริ่มจากเซลล์ติดแนวคลอง แล้วขยายไปยังเซลล์ข้างเคียงที่ต่ำกว่าผิวน้ำและมีทางต่อเนื่องกัน
+      ไม่ให้ข้ามมุมที่ถูกปิดด้วยเซลล์แห้งสองด้าน จึงตัดแอ่งต่ำโดดเดี่ยวออกจากผลน้ำท่วม
+      พื้นที่นอกช่วงแนวตลิ่งใน river.geojson จะไม่แสดงน้ำท่วมแบบคาดเดา และต้องเพิ่มข้อมูลทางเชื่อมก่อน</li>
     <li><b>ข้อจำกัดใหญ่ที่สุด: มีข้อมูลรอยน้ำเพียงระดับเดียว</b> การปรับความลึกตามสัดส่วน
       ระหว่าง 7.20 ถึง 9.97 จึงยังไม่มีข้อมูลยืนยัน สมมติว่ารูปแบบการท่วมคงรูปเดิม
       เปลี่ยนแค่ความลึก ซึ่งจริง ๆ ขอบเขตน้ำท่วมควรค่อย ๆ ขยายจากริมคลองออกไป
@@ -3549,12 +3730,11 @@ $('limits').innerHTML = `
     <li><b>DEM เป็นระดับพื้นดิน ไม่ใช่ระดับพื้นบ้าน</b> บ้านที่ยกใต้ถุนหรือถมที่จะท่วมน้อยกว่าที่แสดง</li>
     <li><b>ตอบเฉพาะในรัศมี 2 กม. จากจุดสำรวจ</b> คิดเป็น 76% ของพื้นที่ DEM
       นอกจากนั้นแสดงเป็นลายทาง</li>
-    <li><b>ระดับที่ตั้งไว้เป็นจุดเริ่มท่วมยังต้องให้ศูนย์ฯ ชี้ขาด</b> — คู่มือการแจ้งเตือนสถานการณ์น้ำ
+    <li><b>เกณฑ์ระดับน้ำจากคู่มือเดิม</b> — คู่มือการแจ้งเตือนสถานการณ์น้ำ
       อำเภอหาดใหญ่ ระบุชัดว่า <b>ระดับตลิ่งของ X.44 คือ 7.15 ม.รทก.</b>
-      ซึ่งเป็นจุดที่น้ำเริ่มล้นคันคลองอู่ตะเภาบริเวณตลาดยรรยงค์ ส่วน 7.40 ม. คือจุดที่เริ่มล้นตลิ่ง
-      ฝั่งซ้ายบริเวณบ้านหาดใหญ่ใน และ 7.20 ม. ที่ตั้งไว้ในแอปเป็นระดับของ ปตร.อู่ตะเภา ไม่ใช่ที่ X.44
-      ผลต่างเพียง 0.05 ม. จึงกระทบตัวเลขน้อยมาก แต่ควรเปลี่ยนเป็น 7.15 เพื่อให้ตรงกับคู่มือทางการ
-      ปรับได้ในช่อง "ระดับน้ำบ้านหาดใหญ่ใน สถานี X.44" แล้วแบบจำลองจะคำนวณใหม่ทั้งหมด</li>
+      และ 7.40 ม. เป็นระดับเฝ้าระวังฝั่งซ้ายบริเวณบ้านหาดใหญ่ใน แต่เกณฑ์ดังกล่าวไม่ได้ใช้เปิดพื้นที่สีเหลืองในแผนที่รุ่นนี้;
+      แผนที่ใช้ Q รวม 1,680 ม³/วินาทีตามข้อมูลความสามารถทางน้ำที่ศูนย์ฯ ยืนยัน
+      ส่วน 7.20 ม. ที่ตั้งไว้ในสมการความลึกเป็นจุดอ้างอิงของแบบจำลองเดิม จึงยังคงไว้เพื่อไม่ให้สมการเดิมคลาดเคลื่อน</li>
     <li><b>การเล่นย้อนเหตุการณ์ใช้สมดุลน้ำรายวัน</b> เมื่อป้อนปริมาณน้ำจริงของวันที่ 25 พ.ย. 68
       สมการให้ระดับ X.44 เท่ากับ 10.20 ม. ขณะที่ตรวจวัดได้จริง 9.97 ม. ต่างกัน 0.23 ม.
       ถือว่าใกล้เคียงที่ปลายสูงสุด แต่ในช่วงน้ำกำลังขึ้น (22–23 พ.ย.) สมการให้เพียง 7.25–7.33 ม.
@@ -3570,13 +3750,14 @@ WATCH_POINTS.forEach((s, i) => {
   }).bindPopup(popup).addTo(map);
 });
 
-loadModel().then(() => {
+Promise.all([loadModel(), loadRiverGeometry().catch(error => { console.warn(error); return null; })]).then(() => {
   buildSafeMask();
   loadShelters();
   syncFields();
   buildZoneTable(); buildComList(''); setLegend(); buildDays(); renderAlertTab();
-  renderFlood(); floodLayer.addTo(map);
-  render(); $('boot').remove();
+  render(); renderFlood(); floodLayer.addTo(map);
+  if (riverLayer.getLayers().length) riverLayer.addTo(map);
+  $('boot').remove();
   loadLive(false);
 }).catch(() => { $('boot').textContent = 'อ่านแบบจำลองภูมิประเทศไม่สำเร็จ'; });
 
