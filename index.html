@@ -1030,7 +1030,7 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.4.6 · ความลึกเพิ่มแบบค่อยเป็นค่อยไปหลัง X.44 ถึง 8.30 ม.</span>
+    <span class="ver">Version 0.4.7 · แผนที่ฐานไม่ใช้ API key · แสดงขอบเขต DEM แบบไล่จาง</span>
     <div style="margin-top:13px">
       ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย — โปรดตรวจสอบกับประกาศทางการ<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
@@ -1060,7 +1060,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="flood-fill.js?v=0.4.6"></script>
+<script src="flood-fill.js?v=0.4.7"></script>
 <script src="forecast-model.js?v=0.4.0"></script>
 <script src="hydrograph-analog.js?v=0.4.0"></script>
 <script src="hydrograph-analog-ui.js?v=0.4.0"></script>
@@ -1325,11 +1325,11 @@ let TOTAL_Q_SOURCE = 'ประเมินจากสมการระดั�
 let here = null, youMarker = null, youHalo = null;
 const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([7.007, 100.470], 13);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 19, keepBuffer: 1, updateWhenIdle: true
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, keepBuffer: 1, updateWhenIdle: true, crossOrigin: true
 }).addTo(map);
 L.control.attribution({ position: 'bottomleft', prefix: false })
-  .addAttribution('© OpenStreetMap, CARTO · DEM และรอยน้ำท่วม: กรมชลประทาน').addTo(map);
+  .addAttribution('© OpenStreetMap contributors · DEM และรอยน้ำท่วม: กรมชลประทาน').addTo(map);
 map.createPane('tp'); map.getPane('tp').style.zIndex = 350;
 map.createPane('fp'); map.getPane('fp').style.zIndex = 360;
 map.createPane('river'); map.getPane('river').style.zIndex = 420;
@@ -1474,13 +1474,16 @@ function renderFlood() {
   const connected = window.FloodFillEngine && typeof FloodFillEngine.connectedMask === 'function'
     ? FloodFillEngine.connectedMask(w, h, candidate, seeds) : new Uint8Array(size);
   let wetCells = 0;
+  const edgeFadeCells = Math.max(4, Math.round(250 / (DM.step * KY * DISPLAY_RF)));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const index = y * w + x, k = index * 4;
     if (hatched[index]) { hatch(o, k, x, y); continue; }
     if (!connected[index]) continue;
     const dep = depths[index]; wetCells++;
     let ci = 1; while (ci < 5 && dep >= CLS[ci].max) ci++;
-    o[k] = RGB[ci][0]; o[k + 1] = RGB[ci][1]; o[k + 2] = RGB[ci][2]; o[k + 3] = 225;
+    const edgeDistance = Math.min(x, y, w - 1 - x, h - 1 - y);
+    const edgeOpacity = clamp01(edgeDistance / edgeFadeCells);
+    o[k] = RGB[ci][0]; o[k + 1] = RGB[ci][1]; o[k + 2] = RGB[ci][2]; o[k + 3] = Math.round(225 * edgeOpacity);
   }
   g.putImageData(im, 0, 0);
   floodLayer.setUrl(c.toDataURL('image/png'));
@@ -1488,7 +1491,8 @@ function renderFlood() {
   const cellArea = (DM.step * KX * DISPLAY_RF) * (DM.step * KY * DISPLAY_RF) / 1e6;
   const shownArea = wetCells * cellArea, removedArea = (potentialCells - wetCells) * cellArea;
   $('areaOut').innerHTML = `พื้นที่น้ำท่วมที่เชื่อมจากคลองด้วย Flood-fill ราว <b>${fmt(shownArea, 1)}</b> ตร.กม.`
-    + (removedArea > 0.05 ? ` · ตัดแอ่งแยกออก ${fmt(removedArea, 1)} ตร.กม.` : '');
+    + (removedArea > 0.05 ? ` · ตัดแอ่งแยกออก ${fmt(removedArea, 1)} ตร.กม.` : '')
+    + ' · ขอบภาพที่ไล่จางคือขอบเขต DEM ไม่ใช่ขอบน้ำท่วมจริง';
 }
 function renderZone() {
   const RGB = ZONES.map(z => hex(z.c));
@@ -2584,8 +2588,8 @@ function ensureBasinMap(){
     // pixel origin when it creates SVG renderers.
     BASIN_MAP.setView([6.70935,100.40023],9);
     stage='เพิ่มแผนที่ฐาน';
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      maxZoom:18,attribution:'&copy; OpenStreetMap &copy; CARTO'
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,attribution:'&copy; OpenStreetMap contributors',crossOrigin:true
     }).addTo(BASIN_MAP);
     stage='เพิ่มโพลิกอน Thiessen';
     const layer=L.geoJSON(UNIT_THIESSEN,{style:feature=>({
@@ -2880,7 +2884,7 @@ function buildRain174Table(){
 function ensureBasinMap174(){
   if(BASIN_MAP_174||!UNIT_HYDROGRAPH_174_CONFIG||!UNIT_THIESSEN_174)return;
   BASIN_MAP_174=L.map('basinMap174',{scrollWheelZoom:false}).setView([6.95,100.54],11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(BASIN_MAP_174);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors',crossOrigin:true}).addTo(BASIN_MAP_174);
   const layer=L.geoJSON(UNIT_THIESSEN_174,{style:(f)=>({color:BASIN_COLORS[UNIT_HYDROGRAPH_174_CONFIG.rain_stations.findIndex(s=>s.source_polygon_code===f.properties.source_station)%BASIN_COLORS.length],weight:2,fillOpacity:.2}),onEachFeature:(f,p)=>p.bindPopup(`<b>โพลิกอน ${f.properties.source_station}</b><br>จับคู่ฝน ${f.properties.rain_station}<br>พื้นที่ ${fmt(f.properties.area_km2,2)} ตร.กม. · ${fmt(f.properties.weight*100,2)}%`)}).addTo(BASIN_MAP_174);
   UNIT_HYDROGRAPH_174_CONFIG.rain_stations.forEach((s,i)=>L.circleMarker([s.latitude,s.longitude],{radius:7,color:'#fff',weight:2,fillColor:BASIN_COLORS[i],fillOpacity:1}).bindPopup(`<b>${s.name}</b><br>น้ำหนัก ${fmt(s.weight*100,2)}%`).on('click',()=>{const row=$(`rain174Row${i}`);row&&row.scrollIntoView({behavior:'smooth',block:'center'});}).addTo(BASIN_MAP_174));
   BASIN_MAP_174.fitBounds(layer.getBounds(),{padding:[20,20]});
