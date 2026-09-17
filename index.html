@@ -887,7 +887,7 @@
       <div id="flowGateNote"></div></div>
     <input type="range" id="cityQSlider" min="0" max="4000" step="10" value="1110"
       aria-label="ปริมาณน้ำรวมก่อนไหลเข้าเมือง">
-    <div class="scale"><span>0</span><span>เกณฑ์พื้นที่ฝั่งซ้าย 1,680</span><span>4,000</span></div>
+    <div class="scale"><span>0</span><span>เกณฑ์ความสามารถรวม 2,025</span><span>4,000</span></div>
     <input type="range" id="volSlider" min="0" max="300" step="1" value="96">
     <div class="scale"><span>0</span><span>150</span><span>300</span></div>
     <p class="vol" style="margin-top:6px">น้ำคงเหลือ <b id="volNum">96</b> ล้าน ลบ.ม./วัน
@@ -1030,7 +1030,7 @@
     <span class="logo" role="img" aria-label="ตราศูนย์อุทกวิทยาชลประทานภาคใต้"></span>
     <span class="org">พัฒนาโดย ศูนย์อุทกวิทยาชลประทานภาคใต้</span>
     สำนักบริหารจัดการน้ำและอุทกวิทยา กรมชลประทาน<br>
-    <span class="ver">Version 0.4.7 · แผนที่ฐานไม่ใช้ API key · แสดงขอบเขต DEM แบบไล่จาง</span>
+    <span class="ver">Version 0.4.8 · เกณฑ์ Q รวม 2,025 ม³/วินาทีเปิดพื้นที่ทั้งสองฝั่ง</span>
     <div style="margin-top:13px">
       ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย — โปรดตรวจสอบกับประกาศทางการ<br>
       DEM 2 ม. · รอยน้ำท่วม 1,597 จุด · สมการ X.44 จากเอกสารเกณฑ์การเฝ้าระวัง
@@ -1060,7 +1060,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="flood-fill.js?v=0.4.7"></script>
+<script src="flood-fill.js?v=0.4.8"></script>
 <script src="forecast-model.js?v=0.4.0"></script>
 <script src="hydrograph-analog.js?v=0.4.0"></script>
 <script src="hydrograph-analog-ui.js?v=0.4.0"></script>
@@ -1077,7 +1077,7 @@ const RESID_PNG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAigAAAJiCAAAAADIp
    ค่าคงที่: สมการมาจากเอกสาร, เกณฑ์ล้นคลองมาจากผู้ใช้, ผิวน้ำมาจากการปรับเทียบ
    ========================================================================= */
 const EQ_A = 0.0097, EQ_B = 7.2383;
-const CITY_Q_CAPACITY = 1680, R1_Q_CAPACITY = 1200, X44_Q_CAPACITY = 480;
+const CITY_Q_CAPACITY = 2025, R1_Q_CAPACITY = 1200, X44_Q_CAPACITY = 825;
 const RIGHT_BANK_BREACH_H = 8.30, MCM_DAY_PER_CMS = 0.0864;
 const DEPTH_RAMP_GAMMA = 0.65, CITY_Q_REFERENCE = 4022;
 let H0 = 7.20;                 // ระดับที่น้ำเริ่มล้นคลองอู่ตะเภา — ต่ำกว่านี้ไม่ท่วม
@@ -1227,7 +1227,7 @@ function flowGateAt(lat, lon, h = H, q = TOTAL_Q) {
   // บริเวณทางแยก/บรรจบ เส้นสองฝั่งอาจไขว้ลำดับกัน จึงเรียงตะวันตก–ตะวันออกทุกแถว
   const west = Math.min(bankA, bankB), east = Math.max(bankA, bankB);
   if (lon < west) return { allowed:q >= CITY_Q_CAPACITY || h >= RIGHT_BANK_BREACH_H, region:'yellow', label:'พื้นที่ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา', threshold:`Q รวม ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที หรือ X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
-  if (lon > east) return { allowed:h >= RIGHT_BANK_BREACH_H, region:'green', label:'พื้นที่ชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่', threshold:`X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
+  if (lon > east) return { allowed:q >= CITY_Q_CAPACITY || h >= RIGHT_BANK_BREACH_H, region:'green', label:'พื้นที่ชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่', threshold:`Q รวม ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที หรือ X.44 ${fmt(RIGHT_BANK_BREACH_H)} ม.รทก.` };
   return { allowed:true, region:'channel', label:'แนวคลอง/ระหว่างตลิ่ง' };
 }
 
@@ -1249,7 +1249,7 @@ const flowDepthFactor = q => Math.pow(clamp01((q - CITY_Q_CAPACITY) / (CITY_Q_RE
 function depthFactorForGate(gate, h = H, q = TOTAL_Q) {
   if (!gate || !gate.allowed) return 0;
   const stageFactor = stageDepthFactor(h);
-  return gate.region === 'yellow' || gate.region === 'channel'
+  return gate.region === 'yellow' || gate.region === 'green' || gate.region === 'channel'
     ? Math.max(stageFactor, flowDepthFactor(q)) : stageFactor;
 }
 const stageAtDepthFactor = f => RIGHT_BANK_BREACH_H
@@ -1727,7 +1727,7 @@ function syncFields(src) {
   if (src !== 'cityQSlider') el('cityQSlider').value = Math.max(0, Math.min(4000, Math.round(TOTAL_Q / 10) * 10));
   if (src !== 'cityQ' && document.activeElement !== el('cityQ')) el('cityQ').value = Math.round(TOTAL_Q);
   el('cityQNum').textContent = fmt(TOTAL_Q, 0);
-  const rightOpen = H >= RIGHT_BANK_BREACH_H;
+  const rightOpen = H >= RIGHT_BANK_BREACH_H || TOTAL_Q >= CITY_Q_CAPACITY;
   const leftOpen = TOTAL_Q >= CITY_Q_CAPACITY || rightOpen;
   el('flowGateNote').innerHTML = `<span class="${leftOpen?'gateon':'gateoff'}">ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้าย ${leftOpen?'เริ่มได้รับผลกระทบ':'ยังไม่ถึงเกณฑ์'}</span> · `
     + `<span class="${rightOpen?'gateon':'gateoff'}">ชุมชนฝั่งขวาและเขตเศรษฐกิจหาดใหญ่ ${rightOpen?'เริ่มได้รับผลกระทบ':'ยังไม่ถึงระดับ 8.30 ม.'}</span><br><small>${TOTAL_Q_SOURCE}</small>`;
@@ -2034,12 +2034,11 @@ let LAST_MODEL_RUN_174 = null;
 let LAST_IMPACT_SCENARIOS = [];
 
 function impactStatus(remainingMcm, x44Stage, totalPeakQ) {
-  const rightOpen=x44Stage>=RIGHT_BANK_BREACH_H;
+  const rightOpen=x44Stage>=RIGHT_BANK_BREACH_H||totalPeakQ>=CITY_Q_CAPACITY;
   const leftOpen=totalPeakQ>=CITY_Q_CAPACITY||rightOpen;
-  if(remainingMcm<=0.005&&leftOpen)return {tone:'watch',text:'แม้สมดุลน้ำรายวันไม่เหลือน้ำส่วนเกิน แต่ Q รวมแตะ 1,680 ม³/วินาที — ยังอาจเกิดน้ำล้นชั่วขณะบริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา จึงต้องติดตาม Hydrograph รายชั่วโมง'};
-  if(remainingMcm<=0.005)return {tone:'safe',text:'การระบายตามสมมติฐานรองรับได้ และยอด Q รวมยังไม่ถึง 1,680 ม³/วินาที'};
-  if(leftOpen&&rightOpen)return {tone:'danger',text:`ระดับ X.44 ถึง 8.30 ม.รทก. — ให้ถือว่าเริ่มเกิดน้ำล้นและส่งผลกระทบครบทั้งบริเวณริมคลอง ร.1 ชุมชนลุ่มต่ำฝั่งซ้าย และชุมชนฝั่งขวาคลองอู่ตะเภารวมถึงเขตเศรษฐกิจหาดใหญ่${totalPeakQ>=CITY_Q_CAPACITY?' โดย Q รวมเกินความสามารถทางน้ำ 1,680 ม³/วินาที':''} หากระดับน้ำเพิ่มต่อเนื่อง ความเสียหายอาจรุนแรงขึ้น`};
-  if(leftOpen)return {tone:'danger',text:'Q รวมถึง 1,680 ม³/วินาที — คาดว่าเริ่มเกิดน้ำล้นบริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา ขณะที่ระดับ X.44 ยังไม่ถึงเกณฑ์ 8.30 ม.รทก. สำหรับพื้นที่ฝั่งขวา'};
+  if(remainingMcm<=0.005&&leftOpen)return {tone:'watch',text:`แม้สมดุลน้ำรายวันไม่เหลือน้ำส่วนเกิน แต่ Q รวมแตะ ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที — ยังอาจเกิดน้ำล้นชั่วขณะทั้งบริเวณคลอง ร.1 และคลองอู่ตะเภา จึงต้องติดตาม Hydrograph รายชั่วโมง`};
+  if(remainingMcm<=0.005)return {tone:'safe',text:`การระบายตามสมมติฐานรองรับได้ และยอด Q รวมยังไม่ถึง ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที`};
+  if(leftOpen&&rightOpen)return {tone:'danger',text:`คาดว่าเริ่มเกิดน้ำล้นและส่งผลกระทบทั้งบริเวณริมคลอง ร.1 ชุมชนลุ่มต่ำฝั่งซ้าย และชุมชนฝั่งขวาคลองอู่ตะเภารวมถึงเขตเศรษฐกิจหาดใหญ่${totalPeakQ>=CITY_Q_CAPACITY?` เนื่องจาก Q รวมเกินความสามารถทางน้ำ ${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที`:' เนื่องจากระดับ X.44 ถึง 8.30 ม.รทก.'} หากน้ำเพิ่มต่อเนื่อง ความเสียหายอาจรุนแรงขึ้น`};
   return {tone:'watch',text:'ยังไม่ถึงเกณฑ์เปิดทางน้ำทั้งสองฝั่ง แต่ให้ติดตามแนวโน้ม Q รวมและระดับ X.44 ต่อเนื่อง'};
 }
 
@@ -2096,7 +2095,7 @@ function renderForecastImpact(){
       คลองเรียน <b>${fmt(impact.rianVolume,3)}</b> + คลองวาด <b>${fmt(impact.wadVolume,3)}</b> + คลองต่ำ <b>${fmt(impact.tamVolume,3)}</b><br>
       = น้ำเข้ารวม <b>${fmt(impact.totalInflow,3)}</b> − ระบาย <b>${fmt(impact.drainageMcm,3)}</b><br>
       = น้ำคงเหลือ <b>${fmt(impact.remaining,3)} ล้าน ลบ.ม./วัน</b><br>
-      Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> (${impact.totalPeakQ>=CITY_Q_CAPACITY?'ถึง':'ยังไม่ถึง'}เกณฑ์ 1,680)<br>
+      Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> (${impact.totalPeakQ>=CITY_Q_CAPACITY?'ถึง':'ยังไม่ถึง'}เกณฑ์ ${CITY_Q_CAPACITY.toLocaleString('th-TH')})<br>
       ${impact.remaining<=0.005
         ? `ไม่เหลือน้ำส่วนเกิน จึงใช้ระดับเริ่มล้น X.44 <b>${fmt(H0)} ม.รทก.</b> เป็นขอบบนสำหรับแผนที่`
         : `สมการ H = 0.0097V + 7.2383 → X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> · พื้นที่ศักยภาพจาก DEM ก่อนคัดทางน้ำไม่เกิน <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}
@@ -2118,7 +2117,7 @@ function applyImpactToMap(index){
   $('mapImpactAnswer').textContent=impact.status.text;
   $('mapImpactMath').innerHTML=`X.90 <b>${fmt(impact.x90Volume,3)}</b> + X.174 <b>${fmt(impact.x174Volume,3)}</b> + คลองเรียน <b>${fmt(impact.rianVolume,3)}</b> + คลองวาด <b>${fmt(impact.wadVolume,3)}</b> + คลองต่ำ <b>${fmt(impact.tamVolume,3)}</b> = น้ำเข้ารวม <b>${fmt(impact.totalInflow,3)}</b><br>
     หักระบาย <b>${fmt(impact.drainageMcm,3)}</b> → คงเหลือ <b>${fmt(impact.remaining,3)} ล้าน ลบ.ม./วัน</b><br>
-    Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> · ความสามารถคลอง ร.1 + ทาง X.44 = <b>1,680 ม³/วินาที</b><br>
+    Q สูงสุดรวมก่อนเข้าเมือง <b>${fmt(impact.totalPeakQ,0)} ม³/วินาที</b> · ความสามารถคลอง ร.1 + ทาง X.44 = <b>${CITY_Q_CAPACITY.toLocaleString('th-TH')} ม³/วินาที</b><br>
     ${impact.remaining<=0.005
       ? `ความสามารถระบายมากกว่าน้ำเข้า จึงไม่ใช้ค่าคงที่ของสมการมาตีความว่าเกิดน้ำท่วม และแสดงแผนที่ที่ระดับเริ่มล้น <b>${fmt(H0)} ม.รทก.</b>`
       : `แทน V ใน H = 0.0097V + 7.2383 ได้ X.44 <b>${fmt(impact.mapStage)} ม.รทก.</b> และพื้นที่ศักยภาพจาก DEM ก่อนคัดทางน้ำไม่เกิน <b>${fmt(impact.floodedArea,1)} ตร.กม.</b>`}<br>
@@ -3540,7 +3539,7 @@ const X44_MARKS = [
   [5.38, 'เกณฑ์เสี่ยง — หากยังขึ้นต่อเนื่อง อีกประมาณ 8 ชั่วโมงระดับน้ำจะถึงตลิ่ง'],
   [5.85, 'เกณฑ์เสี่ยง — หากยังขึ้นต่อเนื่อง อีกประมาณ 6 ชั่วโมงระดับน้ำจะถึงตลิ่ง'],
   [7.15, 'ระดับตลิ่ง — น้ำเริ่มล้นคันคลองอู่ตะเภาบริเวณตลาดยรรยงค์'],
-  [7.40, 'ระดับเฝ้าระวังฝั่งซ้ายตามคู่มือเดิม (แผนที่ใช้ Q รวม 1,680 ม³/วินาทีเป็นเกณฑ์ประเมินพื้นที่ริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภา)'],
+  [7.40, 'ระดับเฝ้าระวังฝั่งซ้ายตามคู่มือเดิม (แผนที่ใช้ Q รวม 2,025 ม³/วินาทีเป็นเกณฑ์ความสามารถรวมของคลอง ร.1 และทาง X.44)'],
   [8.30, 'ระดับที่เริ่มส่งผลกระทบต่อชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่'],
   [10.00, 'น้ำท่วมแผ่ขยายในพื้นที่อำเภอหาดใหญ่']
 ];
@@ -3737,15 +3736,15 @@ $('limits').innerHTML = `
   ผลคำนวณยังไม่ผ่านการรับรองสำหรับการเตือนภัย และข้อมูลบางส่วนไม่ได้อัปเดตแบบเวลาจริง</div>
   <ul>
     <li><b>กติกาการเปิดพื้นที่บนแผนที่</b> ใช้แนวคลองและตลิ่งจากไฟล์ river.geojson เป็นขอบแบ่งการไหล:
-      พื้นที่บริเวณริมคลอง ร.1 และชุมชนลุ่มต่ำฝั่งซ้ายคลองอู่ตะเภาเริ่มได้รับผลกระทบเมื่อ <b>Q รวมก่อนไหลเข้าเมืองถึง 1,680 ม³/วินาที</b> หรือเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b>
-      ซึ่งเท่ากับความสามารถคลอง ร.1 1,200 + ทาง X.44 480 ม³/วินาที;
+      พื้นที่บริเวณริมคลอง ร.1 ชุมชนลุ่มต่ำฝั่งซ้าย และชุมชนฝั่งขวาคลองอู่ตะเภาเริ่มได้รับผลกระทบเมื่อ <b>Q รวมก่อนไหลเข้าเมืองถึง 2,025 ม³/วินาที</b> หรือเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b>
+      ซึ่งเท่ากับความสามารถคลอง ร.1 1,200 + ทาง X.44 825 ม³/วินาที;
       พื้นที่ชุมชนฝั่งขวาคลองอู่ตะเภาและเขตเศรษฐกิจหาดใหญ่เริ่มได้รับผลกระทบเมื่อระดับ X.44 ถึง <b>8.30 ม.รทก.</b>
       และมีแนวโน้มได้รับความเสียหายรุนแรงขึ้นหากระดับน้ำยังคงเพิ่มสูงต่อเนื่อง
-      เมื่อ X.44 ถึง 8.30 ม.รทก. ให้ถือว่าเริ่มได้รับผลกระทบครบทั้งคลอง ร.1 และคลองอู่ตะเภาทั้งสองฝั่ง แม้ Q ที่เทียบจากสมการระดับ–ปริมาตรรายวันยังต่ำกว่า 1,680 ม³/วินาที</li>
+      เมื่อ X.44 ถึง 8.30 ม.รทก. ให้ถือว่าเริ่มได้รับผลกระทบครบทั้งคลอง ร.1 และคลองอู่ตะเภาทั้งสองฝั่ง แม้ Q ที่เทียบจากสมการระดับ–ปริมาตรรายวันยังต่ำกว่า 2,025 ม³/วินาที</li>
     <li><b>ความลึกหลังเริ่มล้นเพิ่มแบบค่อยเป็นค่อยไป</b> แยกจากเงื่อนไขเปิดพื้นที่ โดยใช้
       <b>f = [(H − 8.30)/(Hอ้างอิง − 8.30)]<sup>0.65</sup></b> จำกัดค่าไว้ระหว่าง 0–1 แล้วคูณความลึกของรอยน้ำอ้างอิง
       ทำให้ที่ 8.30 ม. ความลึกเริ่มใกล้ศูนย์ ไม่รับความลึกจากฐาน 7.20 ม. ทันที
-      สำหรับบริเวณริมคลอง ร.1 และฝั่งซ้าย ใช้ตัวคูณจาก Q รวมในลักษณะเดียวกันระหว่าง 1,680–4,022 ม³/วินาที และเลือกค่าที่สูงกว่าระหว่างผลจาก H กับ Q</li>
+      สำหรับพื้นที่ทั้งสองฝั่ง ใช้ตัวคูณจาก Q รวมในลักษณะเดียวกันระหว่าง 2,025–4,022 ม³/วินาที และเลือกค่าที่สูงกว่าระหว่างผลจาก H กับ Q</li>
     <li><b>การกระจายน้ำใช้ Flood-fill</b> เริ่มจากเซลล์ติดแนวคลอง แล้วขยายไปยังเซลล์ข้างเคียงที่ต่ำกว่าผิวน้ำและมีทางต่อเนื่องกัน
       ไม่ให้ข้ามมุมที่ถูกปิดด้วยเซลล์แห้งสองด้าน จึงตัดแอ่งต่ำโดดเดี่ยวออกจากผลน้ำท่วม
       พื้นที่นอกช่วงแนวตลิ่งใน river.geojson จะไม่แสดงน้ำท่วมแบบคาดเดา และต้องเพิ่มข้อมูลทางเชื่อมก่อน</li>
@@ -3762,7 +3761,7 @@ $('limits').innerHTML = `
     <li><b>เกณฑ์ระดับน้ำจากคู่มือเดิม</b> — คู่มือการแจ้งเตือนสถานการณ์น้ำ
       อำเภอหาดใหญ่ ระบุชัดว่า <b>ระดับตลิ่งของ X.44 คือ 7.15 ม.รทก.</b>
       และ 7.40 ม. เป็นระดับเฝ้าระวังฝั่งซ้ายบริเวณบ้านหาดใหญ่ใน แต่เกณฑ์ดังกล่าวไม่ได้ใช้เปิดพื้นที่ฝั่งซ้ายในแผนที่รุ่นนี้;
-      แผนที่ใช้ Q รวม 1,680 ม³/วินาทีตามข้อมูลความสามารถทางน้ำที่ศูนย์ฯ ยืนยัน
+      แผนที่ใช้ Q รวม 2,025 ม³/วินาทีตามข้อมูลความสามารถทางน้ำที่ศูนย์ฯ ยืนยัน (คลอง ร.1 1,200 + ทาง X.44 825 ม³/วินาที)
       ส่วน 7.20 ม. ที่ตั้งไว้ในสมการความลึกเป็นจุดอ้างอิงของแบบจำลองเดิม จึงยังคงไว้เพื่อไม่ให้สมการเดิมคลาดเคลื่อน</li>
     <li><b>การเล่นย้อนเหตุการณ์ใช้สมดุลน้ำรายวัน</b> เมื่อป้อนปริมาณน้ำจริงของวันที่ 25 พ.ย. 68
       สมการให้ระดับ X.44 เท่ากับ 10.20 ม. ขณะที่ตรวจวัดได้จริง 9.97 ม. ต่างกัน 0.23 ม.
